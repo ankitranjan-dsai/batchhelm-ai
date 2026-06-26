@@ -47,6 +47,30 @@ The first release will be a premium operations dashboard with these core screens
 - Documents: generated Markdown/PDF evidence packet
 - Deployment target: Alibaba Cloud Container Service or Elastic Compute Service with Docker
 
+## Run The Frontend
+
+```bash
+cd apps/web
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`.
+
+## Verify The Frontend
+
+```bash
+cd apps/web
+npm run typecheck
+npm run build
+```
+
+The current dashboard implementation is visually tracked against:
+
+- `docs/design-assets/batchhelm-dashboard-concept.png`
+- `docs/design-assets/screenshots/dashboard-desktop-native.png`
+- `docs/design-assets/screenshots/dashboard-mobile.png`
+
 ## Author
 
 Ankit Ranjan
