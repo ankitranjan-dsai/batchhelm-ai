@@ -8,6 +8,7 @@ build/
 .vite/
 .next/
 coverage/
+*.tsbuildinfo
 *.log
 __pycache__/
 .pytest_cache/
@@ -16,3 +17,5 @@ __pycache__/
 venv/
 .idea/
 .vscode/
+apps/web/vite.config.d.ts
+apps/web/vite.config.js
