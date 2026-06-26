@@ -614,6 +614,12 @@ input:focus-visible {
   padding: 0 10px;
 }
 
+.utility-button:disabled,
+.inline-link:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .inline-link {
   min-height: 36px;
   padding: 0;
@@ -1024,6 +1030,100 @@ tr.done .task-check span {
 
 .evidence-dot.pending {
   border-color: #9eabb4;
+}
+
+.packet-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.packet-actions .utility-button {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.packet-preview {
+  margin: 0 14px 14px;
+  padding: 12px;
+  background: #fbfdfe;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.packet-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.packet-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+  border-radius: 8px;
+}
+
+.packet-preview-header strong,
+.packet-preview-header span {
+  display: block;
+}
+
+.packet-preview-header strong {
+  font-size: 12px;
+  font-weight: 900;
+  word-break: break-word;
+}
+
+.packet-preview-header span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.packet-sections {
+  display: grid;
+  gap: 8px;
+}
+
+.packet-section {
+  padding: 9px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.packet-section strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.packet-section p,
+.packet-error {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.packet-error {
+  margin: 0 14px 14px;
+  padding: 10px 12px;
+  color: var(--red);
+  background: var(--red-soft);
+  border: 1px solid #ffd1cc;
+  border-radius: 8px;
 }
 
 .milestone-list {
@@ -1448,6 +1548,16 @@ tr.done .task-check span {
     align-items: stretch;
     flex-direction: column;
     padding: 12px 14px;
+  }
+
+  .packet-actions {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  .packet-actions .utility-button {
+    width: 100%;
   }
 
   .topbar {

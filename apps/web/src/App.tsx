@@ -28,8 +28,10 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
+  evidencePacketDownloadUrl,
   fetchDashboardSync,
   fetchDemoInspection,
+  fetchEvidencePacket,
   uploadShelfPhoto,
   type ProviderStatus,
   type ShelfInspectionResult,
@@ -38,6 +40,7 @@ import { demoIncident } from "./data/demoIncident";
 import type {
   AgentActivity,
   EvidenceItem,
+  EvidencePacket,
   EvidenceStatus,
   InventoryRow,
   MemoryInsight,
@@ -62,6 +65,7 @@ const navItems = [
 type StoreFilter = "all" | "Store A" | "Store B";
 type SyncState = "syncing" | "connected" | "offline";
 type InspectionState = "idle" | "loading" | "ready" | "error";
+type PacketState = "idle" | "loading" | "ready" | "error";
 
 export function App() {
   const [activeNav, setActiveNav] = useState("Recalls");
@@ -73,6 +77,9 @@ export function App() {
   const [inspection, setInspection] = useState<ShelfInspectionResult | null>(null);
   const [inspectionState, setInspectionState] = useState<InspectionState>("idle");
   const [inspectionError, setInspectionError] = useState("");
+  const [packet, setPacket] = useState<EvidencePacket | null>(null);
+  const [packetState, setPacketState] = useState<PacketState>("idle");
+  const [packetError, setPacketError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -87,6 +94,7 @@ export function App() {
         setProvider(sync.provider);
         setSyncState("connected");
         void loadDemoInspection();
+        void loadEvidencePacket();
       })
       .catch(() => {
         if (active) {
@@ -153,6 +161,19 @@ export function App() {
     }
   }
 
+  async function loadEvidencePacket() {
+    setPacketState("loading");
+    setPacketError("");
+    try {
+      const result = await fetchEvidencePacket();
+      setPacket(result);
+      setPacketState("ready");
+    } catch {
+      setPacketState("error");
+      setPacketError("Evidence packet service is unavailable.");
+    }
+  }
+
   return (
     <div className="app-shell">
       <Sidebar
@@ -182,6 +203,10 @@ export function App() {
             <EvidenceProgress
               evidence={incident.evidence}
               progress={evidenceProgress}
+              packet={packet}
+              packetState={packetState}
+              packetError={packetError}
+              onPreview={loadEvidencePacket}
             />
             <ShelfInspectionPanel
               inspection={inspection}
@@ -716,14 +741,43 @@ function TaskBoard({ tasks, onToggleTask }: TaskBoardProps) {
 function EvidenceProgress({
   evidence,
   progress,
+  packet,
+  packetState,
+  packetError,
+  onPreview,
 }: {
   evidence: EvidenceItem[];
   progress: number;
+  packet: EvidencePacket | null;
+  packetState: PacketState;
+  packetError: string;
+  onPreview: () => void;
 }) {
   return (
     <section className="panel evidence-panel" aria-labelledby="evidence-title">
-      <PanelHeader title="Evidence Packet Progress" />
-      <div className="evidence-layout" id="evidence-title">
+      <div className="panel-header with-actions">
+        <h2 id="evidence-title">Evidence Packet Progress</h2>
+        <div className="packet-actions">
+          <button
+            type="button"
+            className="utility-button"
+            onClick={onPreview}
+            disabled={packetState === "loading"}
+          >
+            <FileCheck2 size={16} />
+            {packetState === "loading"
+              ? "Generating"
+              : packet
+                ? "Refresh"
+                : "Preview"}
+          </button>
+          <a className="utility-button" href={evidencePacketDownloadUrl}>
+            <Download size={16} />
+            Download .md
+          </a>
+        </div>
+      </div>
+      <div className="evidence-layout">
         <div
           className="progress-ring"
           style={{ "--progress": `${progress}%` } as React.CSSProperties}
@@ -744,11 +798,35 @@ function EvidenceProgress({
           ))}
         </div>
       </div>
-      <button type="button" className="inline-link">
-        View packet
-        <ArrowRight size={15} />
-      </button>
+      {packetState === "error" ? (
+        <p className="packet-error">{packetError}</p>
+      ) : null}
+      {packet ? <EvidencePacketPreview packet={packet} /> : null}
     </section>
+  );
+}
+
+function EvidencePacketPreview({ packet }: { packet: EvidencePacket }) {
+  return (
+    <div className="packet-preview" aria-label="Evidence packet preview">
+      <div className="packet-preview-header">
+        <span className="packet-icon" aria-hidden="true">
+          <FileText size={18} />
+        </span>
+        <div>
+          <strong>{packet.filename}</strong>
+          <span>Generated {formatPacketTimestamp(packet.generated_at)}</span>
+        </div>
+      </div>
+      <div className="packet-sections">
+        {packet.sections.slice(0, 3).map((section) => (
+          <article className="packet-section" key={section.title}>
+            <strong>{section.title}</strong>
+            <p>{compactSectionBody(section.body)}</p>
+          </article>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -871,6 +949,27 @@ function formatEvidenceStatus(status: EvidenceStatus) {
   };
 
   return labels[status];
+}
+
+function compactSectionBody(body: string) {
+  return body
+    .split("\n")
+    .filter((line) => line.trim() && !line.startsWith("| ---"))
+    .slice(0, 2)
+    .map((line) => line.replace(/^\| /, "").replace(/ \|$/g, "").replace(/ \| /g, " / "))
+    .join(" ");
+}
+
+function formatPacketTimestamp(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }
 
 function syncLabel(syncState: SyncState) {

@@ -2,6 +2,7 @@ import { demoIncident } from "./data/demoIncident";
 import type {
   AgentActivity,
   EvidenceItem,
+  EvidencePacket,
   InventoryRow,
   MemoryInsight,
   Milestone,
@@ -12,6 +13,7 @@ import type {
 } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+export const evidencePacketDownloadUrl = `${API_BASE_URL}/api/evidence/demo-packet.md`;
 
 interface BackendAnalysis {
   incident_id: string;
@@ -121,6 +123,15 @@ export async function uploadShelfPhoto(file: File): Promise<ShelfInspectionResul
   }
 
   return (await response.json()) as ShelfInspectionResult;
+}
+
+export async function fetchEvidencePacket(): Promise<EvidencePacket> {
+  const response = await fetch(`${API_BASE_URL}/api/evidence/demo-packet`);
+  if (!response.ok) {
+    throw new Error(`Evidence packet request failed with ${response.status}`);
+  }
+
+  return (await response.json()) as EvidencePacket;
 }
 
 function toIncident(analysis: BackendAnalysis): RecallIncident {

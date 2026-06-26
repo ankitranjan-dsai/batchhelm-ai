@@ -71,6 +71,19 @@ export interface EvidenceItem {
   status: EvidenceStatus;
 }
 
+export interface EvidencePacket {
+  incident_id: string;
+  filename: string;
+  generated_at: string;
+  sections: EvidencePacketSection[];
+  markdown: string;
+}
+
+export interface EvidencePacketSection {
+  title: string;
+  body: string;
+}
+
 export interface AgentActivity {
   id: string;
   name: string;
