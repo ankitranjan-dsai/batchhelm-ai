@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 import json
+from base64 import b64encode
 from collections.abc import Callable
 from typing import Any
 
 import httpx
 
 from batchhelm_api.config import Settings
-from batchhelm_api.models import ModelJSONRequest, ModelJSONResponse, ProviderStatus
+from batchhelm_api.models import (
+    ModelImageJSONRequest,
+    ModelJSONRequest,
+    ModelJSONResponse,
+    ProviderStatus,
+)
 
 
 class QwenGatewayError(RuntimeError):
@@ -63,6 +69,39 @@ class QwenGateway:
             raw_text=raw_text,
         )
 
+    async def complete_image_json(
+        self, request: ModelImageJSONRequest
+    ) -> ModelJSONResponse:
+        if not self.settings.qwen_configured:
+            return ModelJSONResponse(
+                provider="qwen",
+                model=self.settings.qwen_vision_model,
+                used_fallback=True,
+                content=request.fallback,
+            )
+
+        payload = self._build_image_payload(request)
+        headers = {
+            "Authorization": f"Bearer {self.settings.qwen_api_key}",
+            "Content-Type": "application/json",
+        }
+        async with self._make_client() as client:
+            response = await client.post(
+                "/chat/completions",
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+
+        raw_text = self._extract_message_content(response.json())
+        return ModelJSONResponse(
+            provider="qwen",
+            model=self.settings.qwen_vision_model,
+            used_fallback=False,
+            content=_parse_json_object(raw_text),
+            raw_text=raw_text,
+        )
+
     def _make_client(self) -> httpx.AsyncClient:
         if self._client_factory is not None:
             return self._client_factory()
@@ -80,6 +119,25 @@ class QwenGateway:
                 {"role": "user", "content": request.user},
             ],
             "temperature": 0.2,
+            "response_format": {"type": "json_object"},
+        }
+
+    def _build_image_payload(self, request: ModelImageJSONRequest) -> dict[str, Any]:
+        image_data = b64encode(request.image_bytes).decode("ascii")
+        data_url = f"data:{request.media_type};base64,{image_data}"
+        return {
+            "model": self.settings.qwen_vision_model,
+            "messages": [
+                {"role": "system", "content": request.system},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": request.user},
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                    ],
+                },
+            ],
+            "temperature": 0.1,
             "response_format": {"type": "json_object"},
         }
 

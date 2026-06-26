@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import AnyHttpUrl, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,6 +19,7 @@ class Settings(BaseSettings):
     )
     app_env: str = Field(default="development", validation_alias="APP_ENV")
     log_level: str = Field(default="info", validation_alias="LOG_LEVEL")
+    upload_dir: Path = Field(default=Path("./data/uploads"), validation_alias="UPLOAD_DIR")
 
     model_config = SettingsConfigDict(
         env_file=".env",

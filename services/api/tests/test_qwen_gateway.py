@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from batchhelm_api.config import Settings
-from batchhelm_api.models import ModelJSONRequest
+from batchhelm_api.models import ModelImageJSONRequest, ModelJSONRequest
 from batchhelm_api.qwen import QwenGateway, QwenGatewayError
 
 
@@ -93,3 +93,69 @@ async def test_gateway_rejects_non_json_provider_content() -> None:
 
     with pytest.raises(QwenGatewayError):
         await gateway.complete_json(ModelJSONRequest(system="Return JSON.", user="Analyze."))
+
+
+@pytest.mark.asyncio
+async def test_vision_gateway_returns_fallback_when_key_is_missing() -> None:
+    gateway = QwenGateway(make_settings())
+
+    response = await gateway.complete_image_json(
+        ModelImageJSONRequest(
+            system="Inspect shelf image.",
+            user="Extract label fields.",
+            image_bytes=b"image",
+            media_type="image/png",
+            fallback={"product_name": "Spinach 10 oz", "lot_code": "L2418"},
+        )
+    )
+
+    assert response.used_fallback is True
+    assert response.model == "qwen-vl-plus"
+    assert response.content["lot_code"] == "L2418"
+
+
+@pytest.mark.asyncio
+async def test_vision_gateway_posts_image_url_content_part() -> None:
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["payload"] = request.read().decode()
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"product_name":"Spinach 10 oz","lot_code":"L2418",'
+                                '"upc":"008500001010","confidence":96}'
+                            )
+                        }
+                    }
+                ]
+            },
+        )
+
+    gateway = QwenGateway(
+        make_settings(api_key="test-key"),
+        client_factory=lambda: httpx.AsyncClient(
+            base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            transport=httpx.MockTransport(handler),
+        ),
+    )
+
+    response = await gateway.complete_image_json(
+        ModelImageJSONRequest(
+            system="Inspect shelf image.",
+            user="Extract label fields.",
+            image_bytes=b"abc",
+            media_type="image/png",
+        )
+    )
+
+    payload = str(captured["payload"])
+    assert '"model":"qwen-vl-plus"' in payload
+    assert '"type":"image_url"' in payload
+    assert "data:image/png;base64,YWJj" in payload
+    assert response.used_fallback is False
+    assert response.content["confidence"] == 96

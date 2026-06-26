@@ -194,12 +194,45 @@ class ModelJSONRequest(BaseModel):
     fallback: dict[str, Any] = Field(default_factory=dict)
 
 
+class ModelImageJSONRequest(ModelJSONRequest):
+    image_bytes: bytes = Field(exclude=True)
+    media_type: str
+
+
 class ModelJSONResponse(BaseModel):
     provider: str
     model: str
     used_fallback: bool
     content: dict[str, Any]
     raw_text: str | None = None
+
+
+class UploadMetadata(BaseModel):
+    id: str
+    original_filename: str
+    stored_filename: str
+    media_type: str
+    size_bytes: int
+    path: str
+
+
+class ExtractedLabel(BaseModel):
+    product_name: str
+    lot_code: str
+    upc: str
+    best_by: str | None = None
+    confidence: int = Field(ge=0, le=100)
+
+
+class ShelfInspectionResult(BaseModel):
+    upload: UploadMetadata
+    extracted: ExtractedLabel
+    recall_match: bool
+    recommended_action: str
+    review_required: bool
+    evidence_note: str
+    provider: str
+    used_fallback: bool
 
 
 class APIError(BaseModel):
