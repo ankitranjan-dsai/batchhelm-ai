@@ -235,6 +235,19 @@ class ShelfInspectionResult(BaseModel):
     used_fallback: bool
 
 
+class EvidencePacketSection(BaseModel):
+    title: str
+    body: str
+
+
+class EvidencePacket(BaseModel):
+    incident_id: str
+    filename: str
+    generated_at: str
+    sections: list[EvidencePacketSection]
+    markdown: str
+
+
 class APIError(BaseModel):
     code: str
     message: str

@@ -6,13 +6,15 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, File, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from batchhelm_api.config import Settings, get_settings
+from batchhelm_api.evidence_packet import build_demo_shelf_inspection, build_evidence_packet
 from batchhelm_api.models import (
     APIError,
     CustomerNoticeDraft,
+    EvidencePacket,
     ExtractedLabel,
     ModelImageJSONRequest,
     ModelJSONRequest,
@@ -138,6 +140,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             affected_items = analyze_recall_incident(incident).affected_items
         return build_customer_notice(incident, affected_items=affected_items)
 
+    @app.get("/api/evidence/demo-packet", response_model=EvidencePacket)
+    async def demo_evidence_packet() -> EvidencePacket:
+        return _build_demo_evidence_packet()
+
+    @app.get(
+        "/api/evidence/demo-packet.md",
+        response_class=PlainTextResponse,
+    )
+    async def download_demo_evidence_packet() -> PlainTextResponse:
+        packet = _build_demo_evidence_packet()
+        return PlainTextResponse(
+            packet.markdown,
+            media_type="text/markdown; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="{packet.filename}"',
+            },
+        )
+
     @app.get("/api/inspections/demo", response_model=ShelfInspectionResult)
     async def demo_shelf_inspection(
         gateway: QwenGateway = Depends(get_qwen_gateway),
@@ -195,6 +215,15 @@ app = create_app()
 
 def error_payload(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
     return APIError(code=code, message=message, details=details).model_dump()
+
+
+def _build_demo_evidence_packet() -> EvidencePacket:
+    incident = build_demo_incident()
+    return build_evidence_packet(
+        incident=incident,
+        analysis=analyze_recall_incident(incident),
+        inspection=build_demo_shelf_inspection(),
+    )
 
 
 def _inspection_request(image_bytes: bytes, media_type: str) -> ModelImageJSONRequest:
