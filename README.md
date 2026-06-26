@@ -71,6 +71,38 @@ The current dashboard implementation is visually tracked against:
 - `docs/design-assets/screenshots/dashboard-desktop-native.png`
 - `docs/design-assets/screenshots/dashboard-mobile.png`
 
+## Run The Backend
+
+```bash
+cd services/api
+uv sync --extra dev
+uv run uvicorn batchhelm_api.app:app --reload
+```
+
+Open `http://localhost:8000/docs` for the API reference.
+
+## Verify The Backend
+
+```bash
+cd services/api
+uv run pytest -q
+```
+
+Important endpoints:
+
+- `GET /health`
+- `GET /api/incidents/demo`
+- `POST /api/incidents/demo/analyze`
+- `GET /api/qwen/status`
+- `POST /api/qwen/recall-summary`
+- `POST /api/notices/customer-draft`
+
+## Verify Repository Attribution Language
+
+```bash
+scripts/check-attribution.sh
+```
+
 ## Author
 
 Ankit Ranjan
