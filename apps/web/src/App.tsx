@@ -25,7 +25,8 @@ import {
   UserRound,
   Warehouse,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { fetchDashboardSync, type ProviderStatus } from "./api";
 import { demoIncident } from "./data/demoIncident";
 import type {
   AgentActivity,
@@ -52,22 +53,50 @@ const navItems = [
 ];
 
 type StoreFilter = "all" | "Store A" | "Store B";
+type SyncState = "syncing" | "connected" | "offline";
 
 export function App() {
   const [activeNav, setActiveNav] = useState("Recalls");
   const [storeFilter, setStoreFilter] = useState<StoreFilter>("all");
+  const [incident, setIncident] = useState<RecallIncident>(demoIncident);
   const [tasks, setTasks] = useState<StaffTask[]>(demoIncident.tasks);
+  const [provider, setProvider] = useState<ProviderStatus | null>(null);
+  const [syncState, setSyncState] = useState<SyncState>("syncing");
+
+  useEffect(() => {
+    let active = true;
+
+    fetchDashboardSync()
+      .then((sync) => {
+        if (!active) {
+          return;
+        }
+        setIncident(sync.incident);
+        setTasks(sync.incident.tasks);
+        setProvider(sync.provider);
+        setSyncState("connected");
+      })
+      .catch(() => {
+        if (active) {
+          setSyncState("offline");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const filteredInventory = useMemo(() => {
     if (storeFilter === "all") {
-      return demoIncident.inventory;
+      return incident.inventory;
     }
 
-    return demoIncident.inventory.filter((row) => row.store === storeFilter);
-  }, [storeFilter]);
+    return incident.inventory.filter((row) => row.store === storeFilter);
+  }, [incident.inventory, storeFilter]);
 
   const openTaskCount = tasks.filter((task) => task.status !== "complete").length;
-  const evidenceProgress = getEvidenceProgress(demoIncident.evidence);
+  const evidenceProgress = getEvidenceProgress(incident.evidence);
   const quarantinedTotal = filteredInventory.reduce(
     (total, row) => total + row.quarantined,
     0,
@@ -94,15 +123,15 @@ export function App() {
         onSelect={setActiveNav}
       />
       <div className="workspace">
-        <TopBar incident={demoIncident} />
+        <TopBar incident={incident} provider={provider} syncState={syncState} />
         <main className="dashboard" aria-label="Recall command center">
           <section className="dashboard-grid">
-            <IncidentSummary incident={demoIncident} />
+            <IncidentSummary incident={incident} />
             <aside className="right-rail" aria-label="Live intelligence panels">
-              <AgentPanel agents={demoIncident.agents} />
-              <MemoryPanel insights={demoIncident.insights} />
+              <AgentPanel agents={incident.agents} />
+              <MemoryPanel insights={incident.insights} />
             </aside>
-            <WorkflowTimeline workflow={demoIncident.workflow} />
+            <WorkflowTimeline workflow={incident.workflow} />
             <AffectedInventory
               inventory={filteredInventory}
               storeFilter={storeFilter}
@@ -113,12 +142,12 @@ export function App() {
           <section className="lower-grid" aria-label="Recall operations progress">
             <TaskBoard tasks={tasks} onToggleTask={toggleTask} />
             <EvidenceProgress
-              evidence={demoIncident.evidence}
+              evidence={incident.evidence}
               progress={evidenceProgress}
             />
-            <Milestones milestones={demoIncident.milestones} />
+            <Milestones milestones={incident.milestones} />
           </section>
-          <MobileInspection incident={demoIncident} />
+          <MobileInspection incident={incident} />
         </main>
       </div>
     </div>
@@ -184,7 +213,15 @@ function Sidebar({ activeNav, openTaskCount, onSelect }: SidebarProps) {
   );
 }
 
-function TopBar({ incident }: { incident: RecallIncident }) {
+function TopBar({
+  incident,
+  provider,
+  syncState,
+}: {
+  incident: RecallIncident;
+  provider: ProviderStatus | null;
+  syncState: SyncState;
+}) {
   return (
     <header className="topbar">
       <label className="search-box">
@@ -198,6 +235,10 @@ function TopBar({ incident }: { incident: RecallIncident }) {
       </label>
 
       <div className="topbar-actions">
+        <div className={`provider-chip ${syncState}`}>
+          <span>{syncLabel(syncState)}</span>
+          <strong>{provider ? provider.mode : "local demo"}</strong>
+        </div>
         <div className="incident-status">
           <span>Incident Status</span>
           <strong>{incident.status.toUpperCase()}</strong>
@@ -700,4 +741,14 @@ function formatEvidenceStatus(status: EvidenceStatus) {
   };
 
   return labels[status];
+}
+
+function syncLabel(syncState: SyncState) {
+  const labels: Record<SyncState, string> = {
+    syncing: "Syncing API",
+    connected: "API Connected",
+    offline: "Local Demo",
+  };
+
+  return labels[syncState];
 }

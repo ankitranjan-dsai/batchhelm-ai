@@ -259,6 +259,33 @@ input:focus-visible {
   gap: 14px;
 }
 
+.provider-chip {
+  display: grid;
+  min-width: 116px;
+  gap: 2px;
+  padding: 7px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.provider-chip span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.provider-chip strong {
+  color: var(--teal-dark);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.provider-chip.offline strong {
+  color: var(--amber);
+}
+
 .incident-status {
   display: flex;
   align-items: center;
@@ -1187,7 +1214,8 @@ tr.done .task-check span {
   }
 
   .profile-copy,
-  .incident-status span {
+  .incident-status span,
+  .provider-chip {
     display: none;
   }
 
