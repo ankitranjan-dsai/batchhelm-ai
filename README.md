@@ -90,16 +90,33 @@ uv run pytest -q
 
 Important endpoints:
 
-- `GET /health`
-- `GET /api/incidents/demo`
-- `POST /api/incidents/demo/analyze`
-- `GET /api/inspections/demo`
-- `POST /api/inspections/shelf-photo`
-- `GET /api/qwen/status`
-- `POST /api/qwen/recall-summary`
-- `POST /api/notices/customer-draft`
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Service health check |
+| `GET` | `/api/incidents/demo` | Returns the demo recall input |
+| `POST` | `/api/incidents/demo/analyze` | Runs recall workflow analysis |
+| `GET` | `/api/inspections/demo` | Returns a demo shelf inspection result |
+| `POST` | `/api/inspections/shelf-photo` | Inspects an uploaded shelf photo |
+| `GET` | `/api/evidence/demo-packet` | Returns a structured Markdown evidence packet preview |
+| `GET` | `/api/evidence/demo-packet.md` | Downloads the same packet as an audit-ready Markdown attachment |
+| `GET` | `/api/qwen/status` | Reports Qwen gateway mode and configured models |
+| `POST` | `/api/qwen/recall-summary` | Generates a structured recall summary |
+| `POST` | `/api/notices/customer-draft` | Generates a customer notice draft |
 
 Shelf-photo inspection accepts JPEG, PNG, and WebP files up to 8 MB.
+
+## Full Verification
+
+```bash
+cd services/api
+uv run pytest -q
+
+cd ../../apps/web
+npm run build
+
+cd ../..
+scripts/check-attribution.sh
+```
 
 ## Verify Repository Attribution Language
 
