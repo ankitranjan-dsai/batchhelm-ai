@@ -19,6 +19,7 @@ import {
   Mail,
   MoreHorizontal,
   PackageCheck,
+  ScanLine,
   Search,
   Settings,
   Shield,
@@ -26,7 +27,13 @@ import {
   Warehouse,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { fetchDashboardSync, type ProviderStatus } from "./api";
+import {
+  fetchDashboardSync,
+  fetchDemoInspection,
+  uploadShelfPhoto,
+  type ProviderStatus,
+  type ShelfInspectionResult,
+} from "./api";
 import { demoIncident } from "./data/demoIncident";
 import type {
   AgentActivity,
@@ -54,6 +61,7 @@ const navItems = [
 
 type StoreFilter = "all" | "Store A" | "Store B";
 type SyncState = "syncing" | "connected" | "offline";
+type InspectionState = "idle" | "loading" | "ready" | "error";
 
 export function App() {
   const [activeNav, setActiveNav] = useState("Recalls");
@@ -62,6 +70,9 @@ export function App() {
   const [tasks, setTasks] = useState<StaffTask[]>(demoIncident.tasks);
   const [provider, setProvider] = useState<ProviderStatus | null>(null);
   const [syncState, setSyncState] = useState<SyncState>("syncing");
+  const [inspection, setInspection] = useState<ShelfInspectionResult | null>(null);
+  const [inspectionState, setInspectionState] = useState<InspectionState>("idle");
+  const [inspectionError, setInspectionError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -75,6 +86,7 @@ export function App() {
         setTasks(sync.incident.tasks);
         setProvider(sync.provider);
         setSyncState("connected");
+        void loadDemoInspection();
       })
       .catch(() => {
         if (active) {
@@ -115,6 +127,32 @@ export function App() {
     );
   }
 
+  async function loadDemoInspection() {
+    setInspectionState("loading");
+    setInspectionError("");
+    try {
+      const result = await fetchDemoInspection();
+      setInspection(result);
+      setInspectionState("ready");
+    } catch {
+      setInspectionState("error");
+      setInspectionError("Inspection service is unavailable.");
+    }
+  }
+
+  async function inspectShelfPhoto(file: File) {
+    setInspectionState("loading");
+    setInspectionError("");
+    try {
+      const result = await uploadShelfPhoto(file);
+      setInspection(result);
+      setInspectionState("ready");
+    } catch {
+      setInspectionState("error");
+      setInspectionError("Upload failed. Use a JPEG, PNG, or WebP image under 8 MB.");
+    }
+  }
+
   return (
     <div className="app-shell">
       <Sidebar
@@ -145,12 +183,104 @@ export function App() {
               evidence={incident.evidence}
               progress={evidenceProgress}
             />
+            <ShelfInspectionPanel
+              inspection={inspection}
+              state={inspectionState}
+              error={inspectionError}
+              onDemo={loadDemoInspection}
+              onUpload={inspectShelfPhoto}
+            />
             <Milestones milestones={incident.milestones} />
           </section>
           <MobileInspection incident={incident} />
         </main>
       </div>
     </div>
+  );
+}
+
+interface ShelfInspectionPanelProps {
+  inspection: ShelfInspectionResult | null;
+  state: InspectionState;
+  error: string;
+  onDemo: () => void;
+  onUpload: (file: File) => void;
+}
+
+function ShelfInspectionPanel({
+  inspection,
+  state,
+  error,
+  onDemo,
+  onUpload,
+}: ShelfInspectionPanelProps) {
+  return (
+    <section className="panel inspection-panel" aria-labelledby="inspection-title">
+      <div className="panel-header with-actions">
+        <h2 id="inspection-title">Shelf Inspection</h2>
+        <button type="button" className="utility-button" onClick={onDemo}>
+          <ScanLine size={16} />
+          Demo scan
+        </button>
+      </div>
+
+      <div className="inspection-body">
+        <label className="upload-drop">
+          <ScanLine size={24} aria-hidden="true" />
+          <span>Upload shelf photo</span>
+          <small>JPEG, PNG, or WebP under 8 MB</small>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              if (file) {
+                onUpload(file);
+              }
+              event.currentTarget.value = "";
+            }}
+          />
+        </label>
+
+        <div className={`inspection-result ${state}`}>
+          {state === "loading" ? (
+            <p>Inspecting label evidence...</p>
+          ) : state === "error" ? (
+            <p>{error}</p>
+          ) : inspection ? (
+            <>
+              <div className="inspection-result-header">
+                <strong>
+                  {inspection.recall_match ? "Recall match" : "Review needed"}
+                </strong>
+                <span>{inspection.extracted.confidence}% confidence</span>
+              </div>
+              <dl>
+                <div>
+                  <dt>Product</dt>
+                  <dd>{inspection.extracted.product_name}</dd>
+                </div>
+                <div>
+                  <dt>Lot</dt>
+                  <dd>{inspection.extracted.lot_code}</dd>
+                </div>
+                <div>
+                  <dt>UPC</dt>
+                  <dd>{inspection.extracted.upc}</dd>
+                </div>
+              </dl>
+              <p>{inspection.recommended_action}</p>
+              <small>
+                {inspection.used_fallback ? "Demo fallback" : "Qwen vision"} ·{" "}
+                {inspection.upload.original_filename}
+              </small>
+            </>
+          ) : (
+            <p>No shelf image inspected yet.</p>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 

@@ -9,6 +9,8 @@ build/
 .next/
 coverage/
 *.tsbuildinfo
+data/
+services/api/data/
 *.log
 __pycache__/
 .pytest_cache/

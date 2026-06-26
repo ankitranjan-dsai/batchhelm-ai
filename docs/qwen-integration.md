@@ -35,6 +35,8 @@ The first backend milestone exposes:
 
 - `GET /api/qwen/status`
 - `POST /api/qwen/recall-summary`
+- `GET /api/inspections/demo`
+- `POST /api/inspections/shelf-photo`
 
 The gateway sends chat-completion payloads with:
 
@@ -45,13 +47,20 @@ The gateway sends chat-completion payloads with:
 
 ## Planned Vision Use
 
-The next Qwen milestone will route shelf and stockroom images to the configured vision model. The intended workflow is:
+BatchHelm routes shelf and stockroom images to the configured vision model through the backend inspection endpoint. The workflow is:
 
 1. Staff uploads a shelf, cooler, or invoice image.
 2. Backend stores the file and records an audit event.
 3. Vision inspection extracts product name, UPC, lot code, best-by date, and confidence.
 4. Workflow engine compares extracted values against recall criteria.
 5. Low-confidence matches are routed to human review.
+
+Current upload policy:
+
+- accepted media types: JPEG, PNG, WebP
+- maximum file size: 8 MB
+- generated server filenames only
+- raw image contents are not written to logs
 
 ## Local Verification
 
@@ -65,4 +74,5 @@ Then open:
 
 - `http://localhost:8000/health`
 - `http://localhost:8000/api/qwen/status`
+- `http://localhost:8000/api/inspections/demo`
 - `http://localhost:8000/docs`

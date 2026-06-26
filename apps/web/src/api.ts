@@ -56,6 +56,27 @@ export interface DashboardSync {
   provider: ProviderStatus;
 }
 
+export interface ShelfInspectionResult {
+  upload: {
+    original_filename: string;
+    media_type: string;
+    size_bytes: number;
+  };
+  extracted: {
+    product_name: string;
+    lot_code: string;
+    upc: string;
+    best_by: string | null;
+    confidence: number;
+  };
+  recall_match: boolean;
+  recommended_action: string;
+  review_required: boolean;
+  evidence_note: string;
+  provider: string;
+  used_fallback: boolean;
+}
+
 export async function fetchDashboardSync(): Promise<DashboardSync> {
   const [analysisResponse, providerResponse] = await Promise.all([
     fetch(`${API_BASE_URL}/api/incidents/demo/analyze`, { method: "POST" }),
@@ -76,6 +97,30 @@ export async function fetchDashboardSync(): Promise<DashboardSync> {
     incident: toIncident(analysis),
     provider,
   };
+}
+
+export async function fetchDemoInspection(): Promise<ShelfInspectionResult> {
+  const response = await fetch(`${API_BASE_URL}/api/inspections/demo`);
+  if (!response.ok) {
+    throw new Error(`Demo inspection request failed with ${response.status}`);
+  }
+
+  return (await response.json()) as ShelfInspectionResult;
+}
+
+export async function uploadShelfPhoto(file: File): Promise<ShelfInspectionResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_BASE_URL}/api/inspections/shelf-photo`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) {
+    throw new Error(`Shelf inspection request failed with ${response.status}`);
+  }
+
+  return (await response.json()) as ShelfInspectionResult;
 }
 
 function toIncident(analysis: BackendAnalysis): RecallIncident {

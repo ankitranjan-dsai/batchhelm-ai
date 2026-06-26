@@ -93,9 +93,13 @@ Important endpoints:
 - `GET /health`
 - `GET /api/incidents/demo`
 - `POST /api/incidents/demo/analyze`
+- `GET /api/inspections/demo`
+- `POST /api/inspections/shelf-photo`
 - `GET /api/qwen/status`
 - `POST /api/qwen/recall-summary`
 - `POST /api/notices/customer-draft`
+
+Shelf-photo inspection accepts JPEG, PNG, and WebP files up to 8 MB.
 
 ## Verify Repository Attribution Language
 
