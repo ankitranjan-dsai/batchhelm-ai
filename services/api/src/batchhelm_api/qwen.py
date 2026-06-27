@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
+import time
 from base64 import b64encode
 from collections.abc import Callable
 from typing import Any
@@ -14,6 +17,8 @@ from batchhelm_api.models import (
     ModelJSONResponse,
     ProviderStatus,
 )
+
+logger = logging.getLogger("batchhelm.qwen")
 
 
 class QwenGatewayError(RuntimeError):
@@ -48,19 +53,8 @@ class QwenGateway:
             )
 
         payload = self._build_chat_payload(request)
-        headers = {
-            "Authorization": f"Bearer {self.settings.qwen_api_key}",
-            "Content-Type": "application/json",
-        }
-        async with self._make_client() as client:
-            response = await client.post(
-                "/chat/completions",
-                headers=headers,
-                json=payload,
-            )
-            response.raise_for_status()
-
-        raw_text = self._extract_message_content(response.json())
+        data = await self._post(payload, label="text")
+        raw_text = self._extract_message_content(data)
         return ModelJSONResponse(
             provider="qwen",
             model=self.settings.qwen_text_model,
@@ -81,19 +75,8 @@ class QwenGateway:
             )
 
         payload = self._build_image_payload(request)
-        headers = {
-            "Authorization": f"Bearer {self.settings.qwen_api_key}",
-            "Content-Type": "application/json",
-        }
-        async with self._make_client() as client:
-            response = await client.post(
-                "/chat/completions",
-                headers=headers,
-                json=payload,
-            )
-            response.raise_for_status()
-
-        raw_text = self._extract_message_content(response.json())
+        data = await self._post(payload, label="vision")
+        raw_text = self._extract_message_content(data)
         return ModelJSONResponse(
             provider="qwen",
             model=self.settings.qwen_vision_model,
@@ -102,13 +85,75 @@ class QwenGateway:
             raw_text=raw_text,
         )
 
+    async def _post(self, payload: dict[str, Any], *, label: str) -> dict[str, Any]:
+        """POST to the provider with bounded retries and telemetry.
+
+        Retries on transient transport errors and 5xx responses with
+        exponential backoff. 4xx responses fail fast (they will not improve on
+        retry). The API key is never logged.
+        """
+
+        headers = {
+            "Authorization": f"Bearer {self.settings.qwen_api_key}",
+            "Content-Type": "application/json",
+        }
+        attempts = max(1, self.settings.qwen_max_retries)
+        last_error: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            started = time.perf_counter()
+            try:
+                async with self._make_client() as client:
+                    response = await client.post(
+                        "/chat/completions", headers=headers, json=payload
+                    )
+                response.raise_for_status()
+                elapsed_ms = int((time.perf_counter() - started) * 1000)
+                logger.info(
+                    "qwen call ok",
+                    extra={
+                        "qwen_label": label,
+                        "qwen_model": payload.get("model"),
+                        "qwen_attempt": attempt,
+                        "qwen_elapsed_ms": elapsed_ms,
+                    },
+                )
+                return response.json()
+            except httpx.HTTPStatusError as exc:
+                last_error = exc
+                status = exc.response.status_code
+                if status < 500 or attempt >= attempts:
+                    logger.warning(
+                        "qwen call failed",
+                        extra={
+                            "qwen_label": label,
+                            "qwen_status": status,
+                            "qwen_attempt": attempt,
+                        },
+                    )
+                    raise QwenGatewayError(
+                        f"Qwen provider returned HTTP {status}."
+                    ) from exc
+            except httpx.HTTPError as exc:
+                last_error = exc
+                if attempt >= attempts:
+                    logger.warning(
+                        "qwen transport error",
+                        extra={"qwen_label": label, "qwen_attempt": attempt},
+                    )
+                    raise QwenGatewayError("Qwen provider request failed.") from exc
+            await asyncio.sleep(0.2 * attempt)
+
+        raise QwenGatewayError("Qwen provider request failed.") from last_error
+
     def _make_client(self) -> httpx.AsyncClient:
         if self._client_factory is not None:
             return self._client_factory()
 
         return httpx.AsyncClient(
             base_url=str(self.settings.qwen_base_url).rstrip("/"),
-            timeout=httpx.Timeout(30.0, connect=10.0),
+            timeout=httpx.Timeout(
+                self.settings.qwen_timeout_seconds, connect=10.0
+            ),
         )
 
     def _build_chat_payload(self, request: ModelJSONRequest) -> dict[str, Any]:
