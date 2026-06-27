@@ -87,6 +87,35 @@ def build_customer_notice(
     )
 
 
+# ---------------------------------------------------------------------------
+# Public helpers reused by the agent orchestration layer. The deterministic
+# functions below remain the trustworthy baseline; agents layer Qwen reasoning
+# on top of them and fall back to them when the model is unavailable.
+# ---------------------------------------------------------------------------
+
+
+def decide_inventory(
+    item: InventoryItem, incident: RecallIncidentInput
+) -> InventoryDecision:
+    return _decide_inventory(item, incident)
+
+
+def build_staff_tasks(affected_stores: list[str]) -> list[StaffTask]:
+    return _build_tasks(affected_stores)
+
+
+def build_evidence_items() -> list[EvidenceItem]:
+    return _build_evidence()
+
+
+def build_milestones() -> list[Milestone]:
+    return _build_milestones()
+
+
+def build_workflow_timeline(affected_items: int) -> list[WorkflowEvent]:
+    return _build_workflow(affected_items)
+
+
 def _decide_inventory(
     item: InventoryItem, incident: RecallIncidentInput
 ) -> InventoryDecision:
