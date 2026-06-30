@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from batchhelm_api.app import create_app
 from batchhelm_api.config import Settings
+from batchhelm_api.memory_repository import InMemoryMemoryRepository
 
 
 def make_client() -> TestClient:
@@ -13,7 +14,9 @@ def make_client() -> TestClient:
         APP_ENV="test",
         LOG_LEVEL="debug",
     )
-    return TestClient(create_app(settings=settings))
+    return TestClient(
+        create_app(settings=settings, memory_repository=InMemoryMemoryRepository())
+    )
 
 
 def test_health_endpoint() -> None:
@@ -23,7 +26,7 @@ def test_health_endpoint() -> None:
     assert response.json() == {
         "status": "ok",
         "service": "batchhelm-api",
-        "version": "0.1.0",
+        "version": "0.2.0",
     }
 
 

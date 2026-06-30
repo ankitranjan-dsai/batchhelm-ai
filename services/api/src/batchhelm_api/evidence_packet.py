@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from datetime import datetime, timezone
 from enum import Enum
@@ -71,11 +73,35 @@ def build_evidence_packet(
     )
     return EvidencePacket(
         incident_id=incident.id,
+        packet_version=_packet_version(
+            incident_id=incident.id,
+            sections=sections,
+        ),
         filename=f"batchhelm-{_slugify(incident.id)}-evidence.md",
         generated_at=generated_at_value,
         sections=sections,
         markdown=markdown,
     )
+
+
+def _packet_version(
+    *,
+    incident_id: str,
+    sections: list[EvidencePacketSection],
+) -> str:
+    canonical = json.dumps(
+        {
+            "incident_id": incident_id,
+            "sections": [
+                {"title": section.title, "body": section.body}
+                for section in sections
+            ],
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(canonical).hexdigest()}"
 
 
 def _executive_summary(

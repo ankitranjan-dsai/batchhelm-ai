@@ -47,6 +47,51 @@ def test_build_evidence_packet_contains_core_recall_sections() -> None:
     assert "Shelf Inspection Evidence" in packet.markdown
 
 
+def test_packet_version_ignores_generation_timestamp() -> None:
+    incident = build_demo_incident()
+    analysis = analyze_recall_incident(incident)
+    inspection = build_demo_shelf_inspection()
+
+    first = build_evidence_packet(
+        incident=incident,
+        analysis=analysis,
+        inspection=inspection,
+        generated_at=datetime(2026, 6, 26, 10, 30, tzinfo=timezone.utc),
+    )
+    second = build_evidence_packet(
+        incident=incident,
+        analysis=analysis,
+        inspection=inspection,
+        generated_at=datetime(2026, 6, 27, 18, 45, tzinfo=timezone.utc),
+    )
+
+    assert first.generated_at != second.generated_at
+    assert first.packet_version == second.packet_version
+    assert first.packet_version.startswith("sha256:")
+
+
+def test_packet_version_changes_when_evidence_changes() -> None:
+    incident = build_demo_incident()
+    analysis = analyze_recall_incident(incident)
+    inspection = build_demo_shelf_inspection()
+    changed_inspection = inspection.model_copy(
+        update={"evidence_note": "A second shelf image confirmed the lot code."}
+    )
+
+    first = build_evidence_packet(
+        incident=incident,
+        analysis=analysis,
+        inspection=inspection,
+    )
+    changed = build_evidence_packet(
+        incident=incident,
+        analysis=analysis,
+        inspection=changed_inspection,
+    )
+
+    assert first.packet_version != changed.packet_version
+
+
 def test_demo_evidence_packet_endpoint_returns_preview() -> None:
     response = make_client().get("/api/evidence/demo-packet")
 
