@@ -1,0 +1,17 @@
+.git
+.gitignore
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/*.tsbuildinfo
+**/data
+services/api/data
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+docs/design-assets

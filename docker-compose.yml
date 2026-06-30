@@ -1,0 +1,40 @@
+# Local + Alibaba Cloud ECS deployment for BatchHelm.
+# On ECS: install Docker + Compose, set QWEN_API_KEY in the environment or a
+# .env file, then `docker compose up -d --build`.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: batchhelm-api:latest
+    environment:
+      QWEN_API_KEY: ${QWEN_API_KEY:-}
+      QWEN_BASE_URL: ${QWEN_BASE_URL:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
+      QWEN_TEXT_MODEL: ${QWEN_TEXT_MODEL:-qwen-plus}
+      QWEN_VISION_MODEL: ${QWEN_VISION_MODEL:-qwen-vl-plus}
+      APP_ENV: production
+      LOG_LEVEL: info
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-120}
+    volumes:
+      - batchhelm-data:/data
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8000/health').status==200 else sys.exit(1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    image: batchhelm-web:latest
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  batchhelm-data:
