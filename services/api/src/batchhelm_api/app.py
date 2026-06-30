@@ -1,31 +1,57 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, File, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
+from batchhelm_api import inspection
+from batchhelm_api.agents import Orchestrator
 from batchhelm_api.config import Settings, get_settings
+from batchhelm_api.event_stream import RunEventChannel, sse_pack
 from batchhelm_api.evidence_packet import build_demo_shelf_inspection, build_evidence_packet
+from batchhelm_api.memory_repository import (
+    MemoryRepository,
+    MemoryStoreUnavailable,
+    SQLiteMemoryRepository,
+)
 from batchhelm_api.models import (
+    AgentDescriptor,
     APIError,
     CustomerNoticeDraft,
     EvidencePacket,
-    ExtractedLabel,
-    ModelImageJSONRequest,
+    EvidenceReviewState,
+    ManagementBriefing,
+    MemoryRecord,
     ModelJSONRequest,
     ModelJSONResponse,
+    OrchestrationResult,
     ProviderStatus,
     RecallAnalysis,
     RecallIncidentInput,
+    ReviewDecisionRequest,
     ShelfInspectionResult,
-    UploadMetadata,
+)
+from batchhelm_api.observability import (
+    ObservabilityMiddleware,
+    Telemetry,
+    configure_logging,
 )
 from batchhelm_api.qwen import QwenGateway, QwenGatewayError
+from batchhelm_api.qwen_tasks import generate_briefing
+from batchhelm_api.review_repository import (
+    ReviewIdempotencyConflict,
+    ReviewRepository,
+    ReviewStoreUnavailable,
+    SQLiteReviewRepository,
+    UnavailableReviewRepository,
+)
+from batchhelm_api.review_service import ReviewService
 from batchhelm_api.sample_data import build_demo_incident
 from batchhelm_api.storage import UploadValidationError, save_image_upload
 from batchhelm_api.workflow import analyze_recall_incident, build_customer_notice
@@ -46,19 +72,54 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    review_repository: ReviewRepository | None = None,
+    memory_repository: MemoryRepository | None = None,
+) -> FastAPI:
     resolved_settings = settings or get_settings()
+    configure_logging(resolved_settings.log_level)
+
+    repository = review_repository or SQLiteReviewRepository(
+        resolved_settings.database_path
+    )
+    try:
+        repository.initialize()
+    except ReviewStoreUnavailable as exc:
+        repository = UnavailableReviewRepository(exc)
+    review_service = ReviewService(repository)
+
+    memory = memory_repository or SQLiteMemoryRepository(resolved_settings.memory_path)
+    try:
+        memory.initialize()
+    except MemoryStoreUnavailable:
+        from batchhelm_api.memory_repository import InMemoryMemoryRepository
+
+        memory = InMemoryMemoryRepository()
+
+    telemetry = Telemetry()
+
     app = FastAPI(
         title="BatchHelm API",
-        version="0.1.0",
-        description="Recall workflow API for BatchHelm.",
+        version="0.2.0",
+        description="Autonomous recall command center API for BatchHelm.",
         lifespan=lifespan,
     )
     app.state.settings = resolved_settings
+    app.state.review_service = review_service
+    app.state.memory = memory
+    app.state.telemetry = telemetry
 
+    # Inner middleware first; CORS added last so it stays outermost and always
+    # decorates responses (including rate-limit 429s) with CORS headers.
+    app.add_middleware(
+        ObservabilityMiddleware,
+        rate_limit_per_minute=resolved_settings.rate_limit_per_minute,
+        telemetry=telemetry,
+    )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_origins=resolved_settings.cors_origin_list,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -71,6 +132,45 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return JSONResponse(
             status_code=502,
             content=APIError(code="qwen_gateway_error", message=str(exc)).model_dump(),
+        )
+
+    @app.exception_handler(ReviewIdempotencyConflict)
+    async def review_idempotency_handler(
+        _request: Request,
+        _exc: ReviewIdempotencyConflict,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content=APIError(
+                code="idempotency_conflict",
+                message="Request ID was already used for another review decision.",
+            ).model_dump(),
+        )
+
+    @app.exception_handler(ReviewStoreUnavailable)
+    async def review_store_handler(
+        _request: Request,
+        _exc: ReviewStoreUnavailable,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content=APIError(
+                code="review_store_unavailable",
+                message="Review history is temporarily unavailable.",
+            ).model_dump(),
+        )
+
+    @app.exception_handler(MemoryStoreUnavailable)
+    async def memory_store_handler(
+        _request: Request,
+        _exc: MemoryStoreUnavailable,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content=APIError(
+                code="memory_store_unavailable",
+                message="Memory is temporarily unavailable.",
+            ).model_dump(),
         )
 
     @app.exception_handler(ValueError)
@@ -91,7 +191,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
-        return HealthResponse(status="ok", service="batchhelm-api", version="0.1.0")
+        return HealthResponse(status="ok", service="batchhelm-api", version="0.2.0")
 
     @app.get("/api/incidents/demo", response_model=RecallIncidentInput)
     async def get_demo_incident() -> RecallIncidentInput:
@@ -100,6 +200,65 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/incidents/demo/analyze", response_model=RecallAnalysis)
     async def analyze_demo_incident() -> RecallAnalysis:
         return analyze_recall_incident(build_demo_incident())
+
+    @app.get("/api/agents", response_model=list[AgentDescriptor])
+    async def list_agents(
+        orchestrator: Orchestrator = Depends(get_orchestrator),
+    ) -> list[AgentDescriptor]:
+        return [AgentDescriptor(**descriptor) for descriptor in orchestrator.descriptors()]
+
+    @app.post("/api/incidents/demo/run", response_model=OrchestrationResult)
+    async def run_demo_orchestration(
+        orchestrator: Orchestrator = Depends(get_orchestrator),
+    ) -> OrchestrationResult:
+        telemetry.increment("orchestration_runs")
+        return await orchestrator.run(build_demo_incident())
+
+    @app.get("/api/incidents/demo/run/stream")
+    async def stream_demo_orchestration(
+        orchestrator: Orchestrator = Depends(get_orchestrator),
+    ) -> StreamingResponse:
+        telemetry.increment("orchestration_streams")
+        incident = build_demo_incident()
+        channel = RunEventChannel()
+
+        async def event_source() -> AsyncIterator[str]:
+            run_task = asyncio.create_task(
+                orchestrator.run(incident, channel=channel)
+            )
+            # Guarantee the stream terminates even if the run raises.
+            run_task.add_done_callback(
+                lambda task: asyncio.create_task(channel.close())
+            )
+            async for event in channel:
+                yield sse_pack(event)
+            result = await run_task
+            yield f"event: result\ndata: {result.model_dump_json()}\n\n"
+
+        return StreamingResponse(
+            event_source(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    @app.get("/api/memory", response_model=list[MemoryRecord])
+    async def list_memory(
+        memory_repo: MemoryRepository = Depends(get_memory),
+    ) -> list[MemoryRecord]:
+        return memory_repo.list_records()
+
+    @app.post("/api/briefing/demo", response_model=ManagementBriefing)
+    async def demo_briefing(
+        gateway: QwenGateway = Depends(get_qwen_gateway),
+    ) -> ManagementBriefing:
+        incident = build_demo_incident()
+        analysis = analyze_recall_incident(incident)
+        outcome = await generate_briefing(gateway, incident, analysis)
+        return outcome.value
+
+    @app.get("/api/telemetry")
+    async def telemetry_snapshot() -> dict[str, Any]:
+        return {"counters": telemetry.snapshot()}
 
     @app.get("/api/qwen/status", response_model=ProviderStatus)
     async def qwen_status(gateway: QwenGateway = Depends(get_qwen_gateway)) -> ProviderStatus:
@@ -158,26 +317,43 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             },
         )
 
+    @app.get("/api/evidence/demo-review", response_model=EvidenceReviewState)
+    def demo_evidence_review(
+        service: ReviewService = Depends(get_review_service),
+    ) -> EvidenceReviewState:
+        incident, analysis, packet = _build_demo_packet_context()
+        return service.get_state(
+            incident=incident,
+            analysis=analysis,
+            packet=packet,
+        )
+
+    @app.post(
+        "/api/evidence/demo-review/decision",
+        response_model=EvidenceReviewState,
+    )
+    def demo_evidence_review_decision(
+        request: ReviewDecisionRequest,
+        service: ReviewService = Depends(get_review_service),
+    ) -> EvidenceReviewState:
+        incident, analysis, packet = _build_demo_packet_context()
+        return service.record_decision(
+            incident=incident,
+            analysis=analysis,
+            packet=packet,
+            request=request,
+        )
+
     @app.get("/api/inspections/demo", response_model=ShelfInspectionResult)
     async def demo_shelf_inspection(
         gateway: QwenGateway = Depends(get_qwen_gateway),
     ) -> ShelfInspectionResult:
-        upload = UploadMetadata(
-            id="demo-shelf-photo",
-            original_filename="store-b-cooler-spinach.png",
-            stored_filename="demo-shelf-photo.png",
+        return await inspection.inspect_image(
+            gateway=gateway,
+            upload=inspection.demo_upload_metadata(),
+            image_bytes=b"demo-image",
             media_type="image/png",
-            size_bytes=204800,
-            path="sample-data/store-b-cooler-spinach.png",
-        )
-        return _inspection_from_model_content(
-            upload=upload,
-            model_response=await gateway.complete_image_json(
-                _inspection_request(
-                    image_bytes=b"demo-image",
-                    media_type="image/png",
-                )
-            ),
+            incident=build_demo_incident(),
         )
 
     @app.post("/api/inspections/shelf-photo", response_model=ShelfInspectionResult)
@@ -194,10 +370,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             media_type=media_type,
             content=content,
         )
-        model_response = await gateway.complete_image_json(
-            _inspection_request(image_bytes=content, media_type=media_type)
+        return await inspection.inspect_image(
+            gateway=gateway,
+            upload=upload,
+            image_bytes=content,
+            media_type=media_type,
+            incident=build_demo_incident(),
         )
-        return _inspection_from_model_content(upload=upload, model_response=model_response)
 
     return app
 
@@ -210,6 +389,22 @@ def get_request_settings(request: Request) -> Settings:
     return request.app.state.settings
 
 
+def get_review_service(request: Request) -> ReviewService:
+    return request.app.state.review_service
+
+
+def get_memory(request: Request) -> MemoryRepository:
+    return request.app.state.memory
+
+
+def get_orchestrator(request: Request) -> Orchestrator:
+    return Orchestrator(
+        gateway=QwenGateway(request.app.state.settings),
+        memory=request.app.state.memory,
+        settings=request.app.state.settings,
+    )
+
+
 app = create_app()
 
 
@@ -218,60 +413,19 @@ def error_payload(code: str, message: str, details: dict[str, Any] | None = None
 
 
 def _build_demo_evidence_packet() -> EvidencePacket:
+    return _build_demo_packet_context()[2]
+
+
+def _build_demo_packet_context() -> tuple[
+    RecallIncidentInput,
+    RecallAnalysis,
+    EvidencePacket,
+]:
     incident = build_demo_incident()
-    return build_evidence_packet(
+    analysis = analyze_recall_incident(incident)
+    packet = build_evidence_packet(
         incident=incident,
-        analysis=analyze_recall_incident(incident),
+        analysis=analysis,
         inspection=build_demo_shelf_inspection(),
     )
-
-
-def _inspection_request(image_bytes: bytes, media_type: str) -> ModelImageJSONRequest:
-    return ModelImageJSONRequest(
-        system=(
-            "Inspect a shelf or stockroom image for recall evidence. Return only "
-            "JSON with product_name, lot_code, upc, best_by, confidence, "
-            "recall_match, recommended_action, review_required, and evidence_note."
-        ),
-        user=(
-            "Extract product label fields for the active recall: Spinach 10 oz, "
-            "affected lots L2418-L2422, UPC 008500001010."
-        ),
-        image_bytes=image_bytes,
-        media_type=media_type,
-        fallback={
-            "product_name": "Spinach 10 oz",
-            "lot_code": "L2418",
-            "upc": "008500001010",
-            "best_by": "2026-07-18",
-            "confidence": 96,
-            "recall_match": True,
-            "recommended_action": "Quarantine item and attach photo to evidence packet.",
-            "review_required": False,
-            "evidence_note": "Label fields match the active spinach recall criteria.",
-        },
-    )
-
-
-def _inspection_from_model_content(
-    upload: UploadMetadata,
-    model_response: ModelJSONResponse,
-) -> ShelfInspectionResult:
-    content = model_response.content
-    extracted = ExtractedLabel(
-        product_name=str(content.get("product_name", "")),
-        lot_code=str(content.get("lot_code", "")),
-        upc=str(content.get("upc", "")),
-        best_by=content.get("best_by"),
-        confidence=int(content.get("confidence", 0)),
-    )
-    return ShelfInspectionResult(
-        upload=upload,
-        extracted=extracted,
-        recall_match=bool(content.get("recall_match", False)),
-        recommended_action=str(content.get("recommended_action", "Review image manually.")),
-        review_required=bool(content.get("review_required", True)),
-        evidence_note=str(content.get("evidence_note", "Inspection completed.")),
-        provider=model_response.provider,
-        used_fallback=model_response.used_fallback,
-    )
+    return incident, analysis, packet
