@@ -1,6 +1,6 @@
 [project]
 name = "batchhelm-api"
-version = "0.1.0"
+version = "0.2.0"
 description = "BatchHelm recall workflow API and Qwen Cloud integration."
 authors = [{ name = "Ankit Ranjan", email = "ankit0ranjan@gmail.com" }]
 readme = "../../README.md"
