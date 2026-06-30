@@ -29,23 +29,45 @@ BatchHelm supports two modes:
 
 The fallback mode exists so demos, tests, and screenshots stay reliable without external credentials. It does not replace the Qwen integration; it keeps the product usable while credentials are absent.
 
-## Current Provider Surface
+## Qwen Drives The Workflow
 
-The first backend milestone exposes:
+Qwen is the reasoning engine of the agent society, not a side feature. The
+typed task layer in `qwen_tasks.py` turns each workflow step into a structured
+Qwen call whose output is validated against a Pydantic schema and repaired to a
+deterministic fallback on any failure:
 
-- `GET /api/qwen/status`
-- `POST /api/qwen/recall-summary`
-- `GET /api/inspections/demo`
-- `POST /api/inspections/shelf-photo`
+| Workflow step | Qwen task | Schema |
+| --- | --- | --- |
+| Recall notice → criteria | `extract_recall` | `RecallExtraction` |
+| Inventory match reasoning | `assess_inventory_match` | `InventoryMatchReasoning` |
+| Risk classification | `assess_risk` | `RiskAssessment` |
+| Customer notice draft | `draft_customer_notice` | `CustomerNoticeContent` |
+| Management briefing | `generate_briefing` | `ManagementBriefing` |
+| Shelf-photo interpretation | `inspection.inspect_image` | `ShelfInspectionResult` |
+
+Validation rule: if Qwen is unconfigured, errors, or returns JSON that fails
+schema validation, the task returns the deterministic fallback and marks the
+output `source = deterministic`. Valid live output is marked `source = qwen`.
+This is surfaced everywhere — API fields, agent events, and the dashboard badges.
+
+## Provider Surface (API)
+
+- `GET /api/qwen/status` — provider mode + configured models
+- `POST /api/incidents/demo/run` — full multi-agent run (Qwen-driven)
+- `GET /api/incidents/demo/run/stream` — live SSE event stream
+- `POST /api/briefing/demo` — management briefing
+- `GET /api/inspections/demo`, `POST /api/inspections/shelf-photo` — vision
+- `POST /api/qwen/recall-summary` — single-shot structured summary
 
 The gateway sends chat-completion payloads with:
 
-- model from `QWEN_TEXT_MODEL`
+- model from `QWEN_TEXT_MODEL` / `QWEN_VISION_MODEL`
 - system and user messages
 - low temperature for operational consistency
 - JSON-object response formatting
+- bounded retries on 5xx/transport errors with latency telemetry
 
-## Planned Vision Use
+## Vision Use
 
 BatchHelm routes shelf and stockroom images to the configured vision model through the backend inspection endpoint. The workflow is:
 
