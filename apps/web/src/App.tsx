@@ -32,21 +32,27 @@ import {
   fetchDashboardSync,
   fetchDemoInspection,
   fetchEvidencePacket,
+  fetchEvidenceReview,
+  submitReviewDecision,
   uploadShelfPhoto,
   type ProviderStatus,
   type ShelfInspectionResult,
 } from "./api";
 import { demoIncident } from "./data/demoIncident";
+import { EvidenceReviewGate } from "./EvidenceReviewGate";
+import { MissionControl } from "./MissionControl";
 import type {
   AgentActivity,
   EvidenceItem,
   EvidencePacket,
+  EvidenceReviewState,
   EvidenceStatus,
   InventoryRow,
   MemoryInsight,
   Milestone,
   RecallIncident,
   RecallMetric,
+  ReviewDecision,
   Severity,
   StaffTask,
   TaskStatus,
@@ -80,9 +86,15 @@ export function App() {
   const [packet, setPacket] = useState<EvidencePacket | null>(null);
   const [packetState, setPacketState] = useState<PacketState>("idle");
   const [packetError, setPacketError] = useState("");
+  const [review, setReview] = useState<EvidenceReviewState | null>(null);
+  const [reviewState, setReviewState] = useState<PacketState>("idle");
+  const [reviewError, setReviewError] = useState("");
 
   useEffect(() => {
     let active = true;
+
+    void loadDemoInspection();
+    void loadEvidenceWorkspace();
 
     fetchDashboardSync()
       .then((sync) => {
@@ -93,8 +105,6 @@ export function App() {
         setTasks(sync.incident.tasks);
         setProvider(sync.provider);
         setSyncState("connected");
-        void loadDemoInspection();
-        void loadEvidencePacket();
       })
       .catch(() => {
         if (active) {
@@ -174,6 +184,36 @@ export function App() {
     }
   }
 
+  async function loadEvidenceReview() {
+    setReviewState("loading");
+    setReviewError("");
+    try {
+      const result = await fetchEvidenceReview();
+      setReview(result);
+      setReviewState("ready");
+    } catch {
+      setReviewState("error");
+      setReviewError("Evidence review service is unavailable.");
+    }
+  }
+
+  async function loadEvidenceWorkspace() {
+    await Promise.all([loadEvidencePacket(), loadEvidenceReview()]);
+  }
+
+  async function handleReviewDecision(decision: ReviewDecision) {
+    setReviewState("loading");
+    setReviewError("");
+    try {
+      const result = await submitReviewDecision(decision);
+      setReview(result);
+      setReviewState("ready");
+    } catch {
+      setReviewState("error");
+      setReviewError("Review decision could not be applied.");
+    }
+  }
+
   return (
     <div className="app-shell">
       <Sidebar
@@ -198,6 +238,9 @@ export function App() {
               onFilterChange={setStoreFilter}
             />
           </section>
+          <section aria-label="Agent mission control">
+            <MissionControl />
+          </section>
           <section className="lower-grid" aria-label="Recall operations progress">
             <TaskBoard tasks={tasks} onToggleTask={toggleTask} />
             <EvidenceProgress
@@ -206,7 +249,11 @@ export function App() {
               packet={packet}
               packetState={packetState}
               packetError={packetError}
-              onPreview={loadEvidencePacket}
+              review={review}
+              reviewState={reviewState}
+              reviewError={reviewError}
+              onRefresh={loadEvidenceWorkspace}
+              onReviewDecision={handleReviewDecision}
             />
             <ShelfInspectionPanel
               inspection={inspection}
@@ -744,15 +791,27 @@ function EvidenceProgress({
   packet,
   packetState,
   packetError,
-  onPreview,
+  review,
+  reviewState,
+  reviewError,
+  onRefresh,
+  onReviewDecision,
 }: {
   evidence: EvidenceItem[];
   progress: number;
   packet: EvidencePacket | null;
   packetState: PacketState;
   packetError: string;
-  onPreview: () => void;
+  review: EvidenceReviewState | null;
+  reviewState: PacketState;
+  reviewError: string;
+  onRefresh: () => void;
+  onReviewDecision: (decision: ReviewDecision) => void;
 }) {
+  const [activeView, setActiveView] = useState<"review" | "packet">("review");
+  const isRefreshing =
+    packetState === "loading" || reviewState === "loading";
+
   return (
     <section className="panel evidence-panel" aria-labelledby="evidence-title">
       <div className="panel-header with-actions">
@@ -761,15 +820,11 @@ function EvidenceProgress({
           <button
             type="button"
             className="utility-button"
-            onClick={onPreview}
-            disabled={packetState === "loading"}
+            onClick={onRefresh}
+            disabled={isRefreshing}
           >
             <FileCheck2 size={16} />
-            {packetState === "loading"
-              ? "Generating"
-              : packet
-                ? "Refresh"
-                : "Preview"}
+            {isRefreshing ? "Syncing" : "Refresh"}
           </button>
           <a className="utility-button" href={evidencePacketDownloadUrl}>
             <Download size={16} />
@@ -777,32 +832,85 @@ function EvidenceProgress({
           </a>
         </div>
       </div>
-      <div className="evidence-layout">
-        <div
-          className="progress-ring"
-          style={{ "--progress": `${progress}%` } as React.CSSProperties}
-          aria-label={`Evidence packet ${progress}% complete`}
+      <div className="evidence-view-tabs" role="tablist" aria-label="Evidence views">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeView === "review"}
+          className={activeView === "review" ? "active" : ""}
+          onClick={() => setActiveView("review")}
         >
-          <strong>{progress}%</strong>
-          <span>Complete</span>
-        </div>
-        <div className="evidence-list">
-          {evidence.map((item) => (
-            <div className="evidence-row" key={item.id}>
-              <span className={`evidence-dot ${item.status}`} aria-hidden="true">
-                {item.status === "completed" ? <Check size={13} /> : null}
-              </span>
-              <span>{item.label}</span>
-              <em>{formatEvidenceStatus(item.status)}</em>
-            </div>
-          ))}
-        </div>
+          Review
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeView === "packet"}
+          className={activeView === "packet" ? "active" : ""}
+          onClick={() => setActiveView("packet")}
+        >
+          Packet
+        </button>
       </div>
-      {packetState === "error" ? (
-        <p className="packet-error">{packetError}</p>
-      ) : null}
-      {packet ? <EvidencePacketPreview packet={packet} /> : null}
+      <div className="evidence-view" role="tabpanel">
+        {activeView === "review" ? (
+          <>
+            {reviewError ? <p className="packet-error">{reviewError}</p> : null}
+            {review ? (
+              <EvidenceReviewGate
+                review={review}
+                isSubmitting={reviewState === "loading"}
+                onDecision={onReviewDecision}
+              />
+            ) : reviewState === "loading" ? (
+              <EvidenceViewLoading label="Loading review controls" />
+            ) : null}
+          </>
+        ) : (
+          <>
+            {packetError ? <p className="packet-error">{packetError}</p> : null}
+            <div className="evidence-layout">
+              <div
+                className="progress-ring"
+                style={{ "--progress": `${progress}%` } as React.CSSProperties}
+                aria-label={`Evidence packet ${progress}% complete`}
+              >
+                <strong>{progress}%</strong>
+                <span>Complete</span>
+              </div>
+              <div className="evidence-list">
+                {evidence.map((item) => (
+                  <div className="evidence-row" key={item.id}>
+                    <span
+                      className={`evidence-dot ${item.status}`}
+                      aria-hidden="true"
+                    >
+                      {item.status === "completed" ? <Check size={13} /> : null}
+                    </span>
+                    <span>{item.label}</span>
+                    <em>{formatEvidenceStatus(item.status)}</em>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {packet ? (
+              <EvidencePacketPreview packet={packet} />
+            ) : packetState === "loading" ? (
+              <EvidenceViewLoading label="Generating packet preview" />
+            ) : null}
+          </>
+        )}
+      </div>
     </section>
+  );
+}
+
+function EvidenceViewLoading({ label }: { label: string }) {
+  return (
+    <div className="evidence-view-loading" role="status">
+      <span aria-hidden="true" />
+      {label}
+    </div>
   );
 }
 
