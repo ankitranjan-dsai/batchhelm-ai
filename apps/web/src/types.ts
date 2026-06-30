@@ -73,6 +73,7 @@ export interface EvidenceItem {
 
 export interface EvidencePacket {
   incident_id: string;
+  packet_version: string;
   filename: string;
   generated_at: string;
   sections: EvidencePacketSection[];
@@ -82,6 +83,40 @@ export interface EvidencePacket {
 export interface EvidencePacketSection {
   title: string;
   body: string;
+}
+
+export type ReviewStatus = "pending" | "needs-changes" | "approved";
+
+export type ReviewDecision = Exclude<ReviewStatus, "pending">;
+
+export type ReviewChecklistStatus = "passed" | "attention" | "blocked";
+
+export interface ReviewChecklistItem {
+  id: string;
+  label: string;
+  status: ReviewChecklistStatus;
+  detail: string;
+}
+
+export interface ReviewTimelineEvent {
+  id: string;
+  title: string;
+  detail: string;
+  actor: string;
+  at: string;
+  status: ReviewStatus | ReviewChecklistStatus;
+}
+
+export interface EvidenceReviewState {
+  incident_id: string;
+  packet_filename: string;
+  status: ReviewStatus;
+  reviewer: string;
+  ready_to_submit: boolean;
+  blocker_count: number;
+  next_action: string;
+  checklist: ReviewChecklistItem[];
+  timeline: ReviewTimelineEvent[];
 }
 
 export interface AgentActivity {
