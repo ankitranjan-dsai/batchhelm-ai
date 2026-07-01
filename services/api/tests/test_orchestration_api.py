@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 from fastapi.testclient import TestClient
 
 from batchhelm_api.app import create_app
+from batchhelm_api.event_stream import sse_pack
 from batchhelm_api.memory_repository import InMemoryMemoryRepository
+from batchhelm_api.models import AgentEventType, AgentRunEvent, OutputSource
+from batchhelm_api.orchestration_repository import (
+    OrchestrationIdempotencyConflict,
+    OrchestrationStoreUnavailable,
+)
 from tests.conftest import make_settings
 
 
@@ -94,3 +102,151 @@ def test_telemetry_counts_requests() -> None:
 
     assert response.status_code == 200
     assert response.json()["counters"]["requests"] >= 1
+
+
+def test_sse_frame_uses_sequence_as_standard_event_id() -> None:
+    event = AgentRunEvent(
+        id="event-1",
+        run_id="run-1",
+        sequence=12,
+        agent="Inventory Matching Agent",
+        type=AgentEventType.completed,
+        message="Inventory matched.",
+        at="2026-06-30T09:00:00+00:00",
+        source=OutputSource.qwen,
+    )
+
+    frame = sse_pack(event)
+
+    assert frame.startswith("id: 12\nevent: completed\n")
+
+
+def test_start_status_and_event_stream_share_one_run() -> None:
+    with make_client() as client:
+        request_id = str(uuid4())
+
+        started = client.post(
+            "/api/incidents/demo/runs",
+            json={"request_id": request_id},
+        )
+
+        assert started.status_code == 202
+        accepted = started.json()
+        run_id = accepted["run_id"]
+        with client.stream(
+            "GET",
+            f"/api/orchestration/runs/{run_id}/events",
+        ) as response:
+            body = "".join(response.iter_text())
+        status = client.get(f"/api/orchestration/runs/{run_id}")
+
+        assert response.status_code == 200
+        assert f'"run_id":"{run_id}"' in body
+        assert "event: result" in body
+        assert status.status_code == 200
+        assert status.json()["result"]["run_id"] == run_id
+
+
+def test_last_event_id_replays_only_missing_events() -> None:
+    with make_client() as client:
+        started = client.post(
+            "/api/incidents/demo/runs",
+            json={"request_id": str(uuid4())},
+        ).json()
+        run_id = started["run_id"]
+
+        with client.stream(
+            "GET",
+            f"/api/orchestration/runs/{run_id}/events",
+        ) as initial:
+            initial_body = "".join(initial.iter_text())
+        assert "event: result" in initial_body
+
+        response = client.get(
+            f"/api/orchestration/runs/{run_id}/events",
+            headers={"Last-Event-ID": "2"},
+        )
+
+        assert "id: 1\n" not in response.text
+        assert "id: 2\n" not in response.text
+        assert "id: 3\n" in response.text
+
+
+def test_unknown_run_and_invalid_cursor_are_structured_errors() -> None:
+    with make_client() as client:
+        missing = client.get("/api/orchestration/runs/missing")
+        invalid = client.get(
+            "/api/orchestration/runs/missing/events?after=-1"
+        )
+
+        assert missing.status_code == 404
+        assert missing.json()["code"] == "run_not_found"
+        assert invalid.status_code == 400
+        assert invalid.json()["code"] == "invalid_event_cursor"
+
+
+class _InitializationFailureRepository:
+    def initialize(self) -> None:
+        raise OrchestrationStoreUnavailable("sqlite path leaked")
+
+
+def test_orchestration_store_initialization_failure_degrades_to_503() -> None:
+    app = create_app(
+        settings=make_settings(),
+        memory_repository=InMemoryMemoryRepository(),
+        orchestration_repository=_InitializationFailureRepository(),  # type: ignore[arg-type]
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/incidents/demo/runs",
+            json={"request_id": str(uuid4())},
+        )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "code": "orchestration_store_unavailable",
+        "message": "Orchestration history is temporarily unavailable.",
+        "details": None,
+    }
+    assert "sqlite" not in response.text.lower()
+
+
+class _IdempotencyConflictRepository:
+    def initialize(self) -> None:
+        return None
+
+    def list_recoverable(self) -> list[object]:
+        return []
+
+    def create_run(self, **_kwargs: object):
+        raise OrchestrationIdempotencyConflict("private conflict detail")
+
+
+def test_orchestration_idempotency_conflict_is_sanitized() -> None:
+    app = create_app(
+        settings=make_settings(),
+        memory_repository=InMemoryMemoryRepository(),
+        orchestration_repository=_IdempotencyConflictRepository(),  # type: ignore[arg-type]
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/incidents/demo/runs",
+            json={"request_id": str(uuid4())},
+        )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "run_idempotency_conflict"
+    assert "private conflict detail" not in response.text
+
+
+def test_non_integer_last_event_id_is_rejected() -> None:
+    with make_client() as client:
+        response = client.get(
+            "/api/orchestration/runs/missing/events",
+            headers={"Last-Event-ID": "not-a-number"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid_event_cursor"

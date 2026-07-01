@@ -10,6 +10,7 @@ end-of-run payload.
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import AsyncIterator
 
 from batchhelm_api.models import AgentRunEvent
@@ -43,4 +44,24 @@ def sse_pack(event: AgentRunEvent) -> str:
     """Render an event as a Server-Sent Events frame."""
 
     payload = event.model_dump_json()
-    return f"event: {event.type.value}\ndata: {payload}\n\n"
+    return (
+        f"id: {event.sequence}\n"
+        f"event: {event.type.value}\n"
+        f"data: {payload}\n\n"
+    )
+
+
+def sse_result(result_json: str) -> str:
+    return f"event: result\ndata: {result_json}\n\n"
+
+
+def sse_error(code: str, message: str) -> str:
+    payload = json.dumps(
+        {"code": code, "message": message},
+        separators=(",", ":"),
+    )
+    return f"event: run-error\ndata: {payload}\n\n"
+
+
+def sse_heartbeat() -> str:
+    return ": keep-alive\n\n"

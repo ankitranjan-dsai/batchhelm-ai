@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from batchhelm_api.agents import Orchestrator
-from batchhelm_api.agents.base import Agent, AgentContext, AgentOutput
+from batchhelm_api.agents.base import Agent, AgentContext, AgentOutput, EventRecorder
 from batchhelm_api.agents.inventory import INVENTORY_MATCHING, SHELF_VISION
 from batchhelm_api.memory_repository import InMemoryMemoryRepository
-from batchhelm_api.models import AgentEventType, AgentRunStatus, OutputSource
+from batchhelm_api.models import (
+    AgentEventType,
+    AgentRunResult,
+    AgentRunStatus,
+    OutputSource,
+)
+from batchhelm_api.orchestration_state import OrchestrationCheckpoint
 from batchhelm_api.sample_data import build_demo_incident
 from tests.conftest import fallback_gateway, make_settings, scripted_gateway
 
@@ -139,3 +145,104 @@ async def test_flaky_agent_retries_then_succeeds() -> None:
     assert agent_result.status == AgentRunStatus.completed
     assert agent_result.attempts == 2
     assert any(e.type == AgentEventType.retry for e in result.events)
+
+
+async def test_event_is_persisted_before_it_is_published() -> None:
+    order: list[str] = []
+
+    async def persist(event) -> None:
+        order.append(f"persist:{event.sequence}")
+
+    async def publish(event) -> None:
+        order.append(f"publish:{event.sequence}")
+
+    recorder = EventRecorder(
+        "run-1",
+        persist=persist,
+        emit=publish,
+        initial_sequence=7,
+    )
+
+    event = await recorder.record(
+        agent="Orchestrator Agent",
+        type=AgentEventType.started,
+        message="Started.",
+    )
+
+    assert event.sequence == 8
+    assert order == ["persist:8", "publish:8"]
+
+
+class _CountingAgent(Agent):
+    role = "Counts executions"
+
+    def __init__(
+        self,
+        name: str,
+        calls: dict[str, int],
+        depends_on: tuple[str, ...] = (),
+    ) -> None:
+        self.name = name
+        self.calls = calls
+        self.depends_on = depends_on
+
+    async def run(self, ctx: AgentContext) -> AgentOutput:
+        self.calls[self.name] = self.calls.get(self.name, 0) + 1
+        ctx.blackboard["intake_valid"] = True
+        return AgentOutput(
+            summary=f"{self.name} complete",
+            confidence=90,
+            source=OutputSource.deterministic,
+        )
+
+
+async def test_orchestrator_preserves_caller_run_id_and_saves_each_wave() -> None:
+    checkpoints: list[OrchestrationCheckpoint] = []
+    orchestrator = _orchestrator(fallback_gateway())
+
+    result = await orchestrator.run(
+        build_demo_incident(),
+        run_id="run-owned-by-service",
+        checkpoint_sink=checkpoints.append,
+    )
+
+    assert result.run_id == "run-owned-by-service"
+    assert checkpoints
+    assert checkpoints[-1].next_wave == len(orchestrator._waves())
+
+
+async def test_resume_skips_agents_from_completed_waves() -> None:
+    calls: dict[str, int] = {}
+    first = _CountingAgent("First", calls)
+    second = _CountingAgent("Second", calls, depends_on=("First",))
+    orchestrator = _orchestrator(
+        fallback_gateway(),
+        agents=[first, second],
+    )
+    checkpoint = OrchestrationCheckpoint(
+        run_id="run-1",
+        started_at="2026-06-30T09:00:00+00:00",
+        next_wave=1,
+        results=[
+            AgentRunResult(
+                agent="First",
+                role=first.role,
+                status=AgentRunStatus.completed,
+                summary="First complete",
+                confidence=90,
+                source=OutputSource.deterministic,
+                started_at="2026-06-30T09:00:00+00:00",
+                finished_at="2026-06-30T09:00:01+00:00",
+            )
+        ],
+    )
+
+    result = await orchestrator.run(
+        build_demo_incident(),
+        run_id="run-1",
+        recovery=checkpoint,
+    )
+
+    assert calls.get("First", 0) == 0
+    assert calls["Second"] == 1
+    assert [agent.agent for agent in result.agents] == ["First", "Second"]

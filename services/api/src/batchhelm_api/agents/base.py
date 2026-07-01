@@ -19,6 +19,7 @@ from batchhelm_api.models import (
 from batchhelm_api.qwen import QwenGateway
 
 EmitCallback = Callable[[AgentRunEvent], Awaitable[None]]
+PersistCallback = Callable[[AgentRunEvent], Awaitable[None]]
 
 
 def utcnow() -> str:
@@ -28,11 +29,19 @@ def utcnow() -> str:
 class EventRecorder:
     """Collects run events and (optionally) fans them out live."""
 
-    def __init__(self, run_id: str, emit: EmitCallback | None = None) -> None:
+    def __init__(
+        self,
+        run_id: str,
+        emit: EmitCallback | None = None,
+        *,
+        persist: PersistCallback | None = None,
+        initial_sequence: int = 0,
+    ) -> None:
         self.run_id = run_id
         self.events: list[AgentRunEvent] = []
         self._emit = emit
-        self._sequence = 0
+        self._persist = persist
+        self._sequence = initial_sequence
 
     async def record(
         self,
@@ -55,6 +64,8 @@ class EventRecorder:
             source=source,
             data=data,
         )
+        if self._persist is not None:
+            await self._persist(event)
         self.events.append(event)
         if self._emit is not None:
             await self._emit(event)
