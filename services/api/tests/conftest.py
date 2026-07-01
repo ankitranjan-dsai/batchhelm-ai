@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+from tempfile import gettempdir
+from uuid import uuid4
 
 import httpx
 
@@ -16,6 +19,9 @@ def make_settings(api_key: str = "", **overrides: object) -> Settings:
         "QWEN_VISION_MODEL": "qwen-vl-plus",
         "APP_ENV": "test",
         "LOG_LEVEL": "debug",
+        "ORCHESTRATION_DATABASE_PATH": (
+            Path(gettempdir()) / f"batchhelm-orchestration-test-{uuid4().hex}.db"
+        ),
     }
     base.update(overrides)
     return Settings(**base)  # type: ignore[arg-type]

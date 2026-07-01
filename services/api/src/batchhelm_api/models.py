@@ -470,3 +470,30 @@ class OrchestrationResult(BaseModel):
     memory_writes: int = 0
     conflicts_resolved: int = 0
     summary: str = ""
+
+
+class OrchestrationStartRequest(BaseModel):
+    request_id: UUID
+
+
+class OrchestrationRunAccepted(BaseModel):
+    run_id: str
+    incident_id: str
+    status: AgentRunStatus
+    events_url: str
+    result_url: str
+
+
+class OrchestrationRunView(BaseModel):
+    run_id: str
+    incident_id: str
+    status: AgentRunStatus
+    provider_mode: str
+    started_at: str | None = None
+    updated_at: str
+    finished_at: str | None = None
+    next_wave: int = 0
+    checkpoint_version: int = 0
+    result: OrchestrationResult | None = None
+    error_code: str | None = None
+    error_message: str | None = None

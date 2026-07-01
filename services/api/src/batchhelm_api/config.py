@@ -31,6 +31,10 @@ class Settings(BaseSettings):
         default=Path("./data/batchhelm-memory.db"),
         validation_alias="MEMORY_PATH",
     )
+    orchestration_database_path: Path = Field(
+        default=Path("./data/orchestration.db"),
+        validation_alias="ORCHESTRATION_DATABASE_PATH",
+    )
     upload_dir: Path = Field(default=Path("./data/uploads"), validation_alias="UPLOAD_DIR")
     cors_origins: str = Field(
         default="http://localhost:5173,http://127.0.0.1:5173",
