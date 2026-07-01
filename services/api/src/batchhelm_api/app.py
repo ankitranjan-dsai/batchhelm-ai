@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
+from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,7 +13,6 @@ from pydantic import BaseModel
 from batchhelm_api import inspection
 from batchhelm_api.agents import Orchestrator
 from batchhelm_api.config import Settings, get_settings
-from batchhelm_api.event_stream import RunEventChannel, sse_pack
 from batchhelm_api.evidence_packet import build_demo_shelf_inspection, build_evidence_packet
 from batchhelm_api.memory_repository import (
     MemoryRepository,
@@ -31,11 +30,26 @@ from batchhelm_api.models import (
     ModelJSONRequest,
     ModelJSONResponse,
     OrchestrationResult,
+    OrchestrationRunAccepted,
+    OrchestrationRunView,
+    OrchestrationStartRequest,
     ProviderStatus,
     RecallAnalysis,
     RecallIncidentInput,
     ReviewDecisionRequest,
     ShelfInspectionResult,
+)
+from batchhelm_api.orchestration_repository import (
+    OrchestrationIdempotencyConflict,
+    OrchestrationRepository,
+    OrchestrationRunNotFound,
+    OrchestrationStoreUnavailable,
+    SQLiteOrchestrationRepository,
+    UnavailableOrchestrationRepository,
+)
+from batchhelm_api.orchestration_service import (
+    OrchestrationExecutionFailed,
+    OrchestrationService,
 )
 from batchhelm_api.observability import (
     ObservabilityMiddleware,
@@ -67,15 +81,11 @@ class CustomerNoticeRequest(BaseModel):
     affected_items: int | None = None
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    yield
-
-
 def create_app(
     settings: Settings | None = None,
     review_repository: ReviewRepository | None = None,
     memory_repository: MemoryRepository | None = None,
+    orchestration_repository: OrchestrationRepository | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     configure_logging(resolved_settings.log_level)
@@ -97,17 +107,46 @@ def create_app(
 
         memory = InMemoryMemoryRepository()
 
+    orchestration_store = (
+        orchestration_repository
+        or SQLiteOrchestrationRepository(
+            resolved_settings.orchestration_database_path
+        )
+    )
+    try:
+        orchestration_store.initialize()
+    except OrchestrationStoreUnavailable as exc:
+        orchestration_store = UnavailableOrchestrationRepository(exc)
+
+    def build_orchestrator() -> Orchestrator:
+        return Orchestrator(
+            gateway=QwenGateway(resolved_settings),
+            memory=memory,
+            settings=resolved_settings,
+        )
+
+    orchestration_service = OrchestrationService(
+        repository=orchestration_store,
+        orchestrator_factory=build_orchestrator,
+    )
+
+    @asynccontextmanager
+    async def app_lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        await orchestration_service.recover(build_demo_incident)
+        yield
+
     telemetry = Telemetry()
 
     app = FastAPI(
         title="BatchHelm API",
         version="0.2.0",
         description="Autonomous recall command center API for BatchHelm.",
-        lifespan=lifespan,
+        lifespan=app_lifespan,
     )
     app.state.settings = resolved_settings
     app.state.review_service = review_service
     app.state.memory = memory
+    app.state.orchestration_service = orchestration_service
     app.state.telemetry = telemetry
 
     # Inner middleware first; CORS added last so it stays outermost and always
@@ -173,6 +212,58 @@ def create_app(
             ).model_dump(),
         )
 
+    @app.exception_handler(OrchestrationRunNotFound)
+    async def orchestration_not_found_handler(
+        _request: Request,
+        _exc: OrchestrationRunNotFound,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=404,
+            content=APIError(
+                code="run_not_found",
+                message="Orchestration run was not found.",
+            ).model_dump(),
+        )
+
+    @app.exception_handler(OrchestrationIdempotencyConflict)
+    async def orchestration_idempotency_handler(
+        _request: Request,
+        _exc: OrchestrationIdempotencyConflict,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content=APIError(
+                code="run_idempotency_conflict",
+                message="Request ID was already used for another run.",
+            ).model_dump(),
+        )
+
+    @app.exception_handler(OrchestrationStoreUnavailable)
+    async def orchestration_store_handler(
+        _request: Request,
+        _exc: OrchestrationStoreUnavailable,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content=APIError(
+                code="orchestration_store_unavailable",
+                message="Orchestration history is temporarily unavailable.",
+            ).model_dump(),
+        )
+
+    @app.exception_handler(OrchestrationExecutionFailed)
+    async def orchestration_execution_handler(
+        _request: Request,
+        _exc: OrchestrationExecutionFailed,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=500,
+            content=APIError(
+                code="orchestration_failed",
+                message="The orchestration run could not be completed.",
+            ).model_dump(),
+        )
+
     @app.exception_handler(ValueError)
     async def value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
         return JSONResponse(
@@ -207,36 +298,76 @@ def create_app(
     ) -> list[AgentDescriptor]:
         return [AgentDescriptor(**descriptor) for descriptor in orchestrator.descriptors()]
 
+    @app.post(
+        "/api/incidents/demo/runs",
+        response_model=OrchestrationRunAccepted,
+        status_code=202,
+    )
+    async def start_demo_run(
+        request: OrchestrationStartRequest,
+        service: OrchestrationService = Depends(get_orchestration_service),
+    ) -> OrchestrationRunAccepted:
+        telemetry.increment("orchestration_runs")
+        return await service.start(
+            build_demo_incident(),
+            request_id=str(request.request_id),
+        )
+
+    @app.get(
+        "/api/orchestration/runs/{run_id}",
+        response_model=OrchestrationRunView,
+    )
+    async def get_orchestration_run(
+        run_id: str,
+        service: OrchestrationService = Depends(get_orchestration_service),
+    ) -> OrchestrationRunView:
+        return service.get(run_id)
+
+    @app.get("/api/orchestration/runs/{run_id}/events")
+    async def stream_orchestration_run(
+        run_id: str,
+        request: Request,
+        after: int | None = None,
+        service: OrchestrationService = Depends(get_orchestration_service),
+    ):
+        cursor = after
+        if cursor is None:
+            raw_cursor = request.headers.get("last-event-id", "0")
+            try:
+                cursor = int(raw_cursor)
+            except ValueError:
+                return _invalid_event_cursor()
+        if cursor < 0:
+            return _invalid_event_cursor()
+        service.get(run_id)
+        return StreamingResponse(
+            service.stream(run_id, after=cursor),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
     @app.post("/api/incidents/demo/run", response_model=OrchestrationResult)
     async def run_demo_orchestration(
-        orchestrator: Orchestrator = Depends(get_orchestrator),
+        service: OrchestrationService = Depends(get_orchestration_service),
     ) -> OrchestrationResult:
         telemetry.increment("orchestration_runs")
-        return await orchestrator.run(build_demo_incident())
+        accepted = await service.start(
+            build_demo_incident(),
+            request_id=uuid4().hex,
+        )
+        return await service.wait_for_result(accepted.run_id)
 
-    @app.get("/api/incidents/demo/run/stream")
+    @app.get("/api/incidents/demo/run/stream", deprecated=True)
     async def stream_demo_orchestration(
-        orchestrator: Orchestrator = Depends(get_orchestrator),
+        service: OrchestrationService = Depends(get_orchestration_service),
     ) -> StreamingResponse:
         telemetry.increment("orchestration_streams")
-        incident = build_demo_incident()
-        channel = RunEventChannel()
-
-        async def event_source() -> AsyncIterator[str]:
-            run_task = asyncio.create_task(
-                orchestrator.run(incident, channel=channel)
-            )
-            # Guarantee the stream terminates even if the run raises.
-            run_task.add_done_callback(
-                lambda task: asyncio.create_task(channel.close())
-            )
-            async for event in channel:
-                yield sse_pack(event)
-            result = await run_task
-            yield f"event: result\ndata: {result.model_dump_json()}\n\n"
-
+        accepted = await service.start(
+            build_demo_incident(),
+            request_id=uuid4().hex,
+        )
         return StreamingResponse(
-            event_source(),
+            service.stream(accepted.run_id, after=0),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
@@ -405,11 +536,25 @@ def get_orchestrator(request: Request) -> Orchestrator:
     )
 
 
+def get_orchestration_service(request: Request) -> OrchestrationService:
+    return request.app.state.orchestration_service
+
+
 app = create_app()
 
 
 def error_payload(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
     return APIError(code=code, message=message, details=details).model_dump()
+
+
+def _invalid_event_cursor() -> JSONResponse:
+    return JSONResponse(
+        status_code=400,
+        content=APIError(
+            code="invalid_event_cursor",
+            message="Event cursor must be zero or greater.",
+        ).model_dump(),
+    )
 
 
 def _build_demo_evidence_packet() -> EvidencePacket:
