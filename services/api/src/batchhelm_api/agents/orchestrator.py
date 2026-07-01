@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import re
 import time
+from collections.abc import Awaitable, Callable
 from uuid import uuid4
 
 from batchhelm_api import qwen_tasks
@@ -37,6 +38,7 @@ from batchhelm_api.memory_repository import AgentCheckpoint, MemoryRepository
 from batchhelm_api.models import (
     AgentActivity,
     AgentEventType,
+    AgentRunEvent,
     AgentRunResult,
     AgentRunStatus,
     AgentStatus,
@@ -50,10 +52,16 @@ from batchhelm_api.models import (
     WorkflowEvent,
     WorkflowStatus,
 )
+from batchhelm_api.orchestration_state import (
+    OrchestrationBlackboard,
+    OrchestrationCheckpoint,
+)
 from batchhelm_api.qwen import QwenGateway
 from batchhelm_api.workflow import build_milestones, calculate_evidence_progress
 
 ORCHESTRATOR = "Orchestrator Agent"
+CheckpointSink = Callable[[OrchestrationCheckpoint], None]
+PersistEvent = Callable[[AgentRunEvent], Awaitable[None]]
 
 _STATUS_TO_AGENT_STATUS = {
     AgentRunStatus.completed: AgentStatus.complete,
@@ -113,19 +121,31 @@ class Orchestrator:
         self,
         incident: RecallIncidentInput,
         *,
+        run_id: str | None = None,
         channel: RunEventChannel | None = None,
+        persist_event: PersistEvent | None = None,
+        initial_sequence: int = 0,
+        checkpoint_sink: CheckpointSink | None = None,
+        recovery: OrchestrationCheckpoint | None = None,
         shelf_image_bytes: bytes | None = None,
         shelf_image_media_type: str | None = None,
     ) -> OrchestrationResult:
-        run_id = uuid4().hex
-        recorder = EventRecorder(run_id, channel.emit if channel else None)
+        resolved_run_id = run_id or uuid4().hex
+        recorder = EventRecorder(
+            resolved_run_id,
+            channel.emit if channel else None,
+            persist=persist_event,
+            initial_sequence=initial_sequence,
+        )
+        blackboard = recovery.blackboard.to_runtime() if recovery else {}
         ctx = AgentContext(
-            run_id=run_id,
+            run_id=resolved_run_id,
             incident=incident,
             gateway=self.gateway,
             memory=self.memory,
             settings=self.settings,
             recorder=recorder,
+            blackboard=blackboard,
         )
         if shelf_image_bytes is not None:
             ctx.blackboard["shelf_image_bytes"] = shelf_image_bytes
@@ -133,18 +153,47 @@ class Orchestrator:
                 shelf_image_media_type or "image/png"
             )
 
-        started_at = utcnow()
+        started_at = recovery.started_at if recovery else utcnow()
         start_perf = time.perf_counter()
         await recorder.record(
             agent=ORCHESTRATOR,
             type=AgentEventType.orchestrator,
-            message=f"Coordinating {len(self.agents)} agents for {incident.product}.",
+            message=(
+                f"{'Resuming' if recovery else 'Coordinating'} "
+                f"{len(self.agents)} agents for {incident.product}."
+            ),
         )
 
-        results: dict[str, AgentRunResult] = {}
-        for wave in self._waves():
+        results = (
+            {result.agent: result for result in recovery.results}
+            if recovery
+            else {}
+        )
+        waves = self._waves()
+        start_wave = recovery.next_wave if recovery else 0
+        for wave_index in range(start_wave, len(waves)):
+            wave = waves[wave_index]
             await asyncio.gather(
                 *(self._run_agent(agent, ctx, results) for agent in wave)
+            )
+            checkpoint = OrchestrationCheckpoint(
+                run_id=resolved_run_id,
+                started_at=started_at,
+                next_wave=wave_index + 1,
+                blackboard=OrchestrationBlackboard.from_runtime(ctx.blackboard),
+                results=[
+                    results[agent.name]
+                    for agent in self.agents
+                    if agent.name in results
+                ],
+            )
+            if checkpoint_sink is not None:
+                checkpoint_sink(checkpoint)
+            await recorder.record(
+                agent=ORCHESTRATOR,
+                type=AgentEventType.checkpoint,
+                message=f"Wave {wave_index + 1} checkpoint persisted.",
+                data={"next_wave": wave_index + 1},
             )
 
         conflicts = await self._reconcile(ctx)
@@ -180,7 +229,7 @@ class Orchestrator:
             await channel.close()
 
         return OrchestrationResult(
-            run_id=run_id,
+            run_id=resolved_run_id,
             incident_id=incident.id,
             status=status,
             provider_mode=self.gateway.status().mode,
