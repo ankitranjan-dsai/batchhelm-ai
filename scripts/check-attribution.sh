@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+command -v rg >/dev/null || { echo "ripgrep (rg) is required for the attribution scan" >&2; exit 1; }
+
 patterns=(
   "Chat""GPT"
   "Co""dex"
