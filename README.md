@@ -34,19 +34,22 @@ Supporting capabilities (honest scope):
 
 - **Memory:** the Memory Agent persists supplier aliases, decisions, and false
   positives in SQLite and surfaces insights from prior runs.
-- **Edge / mobile:** the shelf-photo endpoint accepts real uploads (JPEG/PNG/WebP,
-  ≤8 MB) for in-store inspection; queued/offline sync is future work.
-- **AI Showrunner:** the orchestrator generates a management briefing from
-  incident state (Qwen with deterministic fallback).
+- **Mobile intake:** the shelf-photo endpoint accepts real uploads
+  (JPEG/PNG/WebP, up to 8 MB) for in-store inspection; queued/offline sync is
+  future work and BatchHelm does not claim the hardware-focused EdgeAgent track.
+- **Executive communication:** the orchestrator generates a management briefing
+  from incident state with Qwen and a deterministic fallback.
 
 ## How It Works
 
-`POST /api/incidents/demo/run` runs the full agent society and returns the
-timeline, per-agent results, the assembled analysis, and the briefing.
-`GET /api/incidents/demo/run/stream` streams the same run as Server-Sent Events
-so the dashboard shows live mission control. Every output is tagged with its
-source — `qwen`, `deterministic`, `memory`, or `reviewer` — so it is always
-clear what is real model output versus deterministic fallback.
+`POST /api/incidents/demo/runs` creates one idempotent orchestration run and
+returns its run ID plus status and event URLs. The dashboard subscribes to
+`GET /api/orchestration/runs/{run_id}/events`, which replays persisted events
+before following live Server-Sent Events. Refreshing or reconnecting resumes
+the same run rather than launching another. The run status endpoint returns the
+durable status and terminal result. Every output is tagged with its source —
+`qwen`, `deterministic`, `memory`, or `reviewer` — so model output is
+distinguishable from fallback.
 
 Qwen drives extraction, inventory-match reasoning, risk classification, the
 customer notice, shelf-photo interpretation, and the briefing. Each call is
@@ -93,6 +96,7 @@ Open `http://localhost:5173`.
 
 ```bash
 cd apps/web
+npm test
 npm run typecheck
 npm run build
 ```
@@ -102,6 +106,8 @@ The current dashboard implementation is visually tracked against:
 - `docs/design-assets/batchhelm-dashboard-concept.png`
 - `docs/design-assets/screenshots/dashboard-desktop-native.png`
 - `docs/design-assets/screenshots/dashboard-mobile.png`
+- `docs/design-assets/screenshots/mission-control-desktop.png`
+- `docs/design-assets/screenshots/mission-control-mobile.png`
 
 ## Run The Backend
 
@@ -127,11 +133,14 @@ Important endpoints:
 | `GET` | `/health` | Service health check |
 | `GET` | `/api/incidents/demo` | Returns the demo recall input |
 | `POST` | `/api/incidents/demo/analyze` | Deterministic baseline analysis |
-| `POST` | `/api/incidents/demo/run` | Runs the full multi-agent orchestration |
-| `GET` | `/api/incidents/demo/run/stream` | Live SSE stream of agent events |
+| `POST` | `/api/incidents/demo/runs` | Idempotently starts one durable orchestration run |
+| `GET` | `/api/orchestration/runs/{run_id}` | Returns persisted run status and terminal result |
+| `GET` | `/api/orchestration/runs/{run_id}/events` | Replays ordered events, then follows the live SSE stream |
+| `POST` | `/api/incidents/demo/run` | Synchronous compatibility endpoint for a full run |
+| `GET` | `/api/incidents/demo/run/stream` | Deprecated compatibility SSE endpoint |
 | `GET` | `/api/agents` | Lists the agent society and dependencies |
 | `GET` | `/api/memory` | Returns persisted memory records |
-| `POST` | `/api/briefing/demo` | Generates the AI Showrunner briefing |
+| `POST` | `/api/briefing/demo` | Generates the management briefing |
 | `GET` | `/api/telemetry` | In-process telemetry counters |
 | `GET` | `/api/inspections/demo` | Returns a demo shelf inspection result |
 | `POST` | `/api/inspections/shelf-photo` | Inspects an uploaded shelf photo |
@@ -159,6 +168,19 @@ interface is ready for a future Postgres adapter.
 
 Shelf-photo inspection accepts JPEG, PNG, and WebP files up to 8 MB.
 
+### Durable Orchestration Storage
+
+Runs, typed wave checkpoints, ordered events, terminal results, and sanitized
+failure states are stored in a separate SQLite WAL database at
+`ORCHESTRATION_DATABASE_PATH` (default `./data/orchestration.db`). Events are
+persisted before publication. SSE clients can replay from `Last-Event-ID` or
+the `after` query parameter, and API startup resumes non-terminal runs from the
+last completed wave.
+
+Worker ownership is currently single-process. Run state survives an API
+restart, but a horizontally scaled deployment requires shared storage and
+distributed worker coordination.
+
 ## Evidence Review Demo
 
 1. Open the Evidence panel and select **Review**.
@@ -175,6 +197,7 @@ cd services/api
 uv run pytest -q
 
 cd ../../apps/web
+npm test
 npm run build
 
 cd ../..

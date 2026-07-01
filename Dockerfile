@@ -10,6 +10,7 @@ ENV PYTHONUNBUFFERED=1 \
     LOG_LEVEL=info \
     DATABASE_PATH=/data/batchhelm.db \
     MEMORY_PATH=/data/batchhelm-memory.db \
+    ORCHESTRATION_DATABASE_PATH=/data/orchestration.db \
     UPLOAD_DIR=/data/uploads
 
 WORKDIR /app

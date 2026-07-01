@@ -40,8 +40,17 @@ Cloud Model Studio** as the reasoning engine.
 
    The dashboard is on port `8080`.
 
-Persistent state (review ledger + agent memory + uploads) is stored on the
-`batchhelm-data` Docker volume mounted at `/data`.
+Persistent state is stored on the `batchhelm-data` Docker volume mounted at
+`/data`:
+
+- review ledger: `/data/batchhelm.db`
+- agent memory: `/data/batchhelm-memory.db`
+- orchestration runs, events, and checkpoints: `/data/orchestration.db`
+- shelf-photo uploads: `/data/uploads`
+
+Run one API replica for the current SQLite-backed worker model. The run and
+event history survives process restarts, but multiple replicas require a shared
+database plus distributed worker claims or leases.
 
 ## Option 2 — Container Service for Kubernetes (ACK)
 
@@ -62,13 +71,18 @@ Persistent state (review ledger + agent memory + uploads) is stored on the
 
 3. Deploy the `api` and `web` Deployments + Services, mounting the secret as
    the `QWEN_API_KEY` environment variable, and attach a persistent volume for
-   `/data`. Front the `web` Service with an Alibaba Cloud SLB / Ingress.
+   `/data`. Keep the API Deployment at one replica for this release. Front the
+   `web` Service with an Alibaba Cloud SLB / Ingress.
+
+Horizontal API scaling is a future mode after the SQLite repositories are
+replaced by shared storage and run ownership is coordinated across workers.
 
 ## Secrets
 
 - The Qwen key is injected at runtime via environment only. It is never baked
   into an image, committed, or written to logs.
-- `LOG_LEVEL`, `CORS_ORIGINS`, and `RATE_LIMIT_PER_MINUTE` are environment-tunable.
+- `LOG_LEVEL`, `CORS_ORIGINS`, `RATE_LIMIT_PER_MINUTE`, `REVIEWER_ROLE`, and
+  all storage paths are environment-tunable.
 
 See [alibaba-cloud-proof.md](alibaba-cloud-proof.md) for the explicit record of
 which Alibaba Cloud services and APIs BatchHelm depends on.

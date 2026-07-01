@@ -12,21 +12,24 @@ cd services/api && uv sync --extra dev && uv run uvicorn batchhelm_api.app:app -
 cd apps/web && npm install && npm run dev
 ```
 
-Optional: export `QWEN_API_KEY` to record in live Qwen mode. Without it the demo
-runs in deterministic fallback and still shows the full flow.
+Set `QWEN_API_KEY` before recording and verify `/api/qwen/status` reports
+`mode: "live"`. Deterministic fallback is for local development and automated
+verification; the submission recording must visibly demonstrate Qwen output.
 
 ## Run of show
 
 | Time | On screen | Say |
 | --- | --- | --- |
 | 0:00–0:20 | Recall inbox / incident summary | "Small grocers get a recall notice and have minutes to act. BatchHelm is an autonomous recall command center." |
-| 0:20–0:45 | Agent Mission Control streaming | "One click runs a society of specialist agents — intake, extraction, inventory matching, vision, risk, operations, communications, compliance, and memory — coordinated by an orchestrator." |
-| 0:45–1:10 | Event timeline with source badges | "Events stream live. Each badge shows whether the output came from Qwen, the deterministic fallback, or persistent memory. Inventory and vision run in parallel." |
-| 1:10–1:35 | Affected inventory + conflict/resolved events | "Qwen extracts recall criteria from the raw notice and reasons over the inventory match. The orchestrator reconciles any disagreement against the authoritative inventory before acting." |
-| 1:35–2:00 | Tasks + customer notice | "It generates removal, quarantine, and disposal tasks and drafts a customer notice with Qwen." |
-| 2:00–2:25 | Evidence review gate | "Critical steps require human approval. The decision is stored in a durable, idempotent ledger that survives restarts and packet regeneration." |
-| 2:25–2:45 | AI Showrunner briefing + memory panel | "It writes a management briefing and remembers supplier aliases and decisions so the next recall is faster." |
-| 2:45–3:00 | Evidence packet download | "Finally, an audit-ready evidence packet. Production-ready, deployed on Alibaba Cloud, powered by Qwen." |
+| 0:20–0:45 | Agent Mission Control streaming six waves | "One action starts one durable run. Nine specialists divide the work, with inventory and vision executing in parallel." |
+| 0:45–1:05 | Event timeline and Qwen/source badges | "Every event is persisted before it appears. Source badges distinguish live Qwen reasoning, deterministic safeguards, and memory." |
+| 1:05–1:25 | Select an agent to open its inspector | "The inspector exposes each agent's role, reasoning, confidence, attempts, source, and timing rather than hiding the workflow behind a chat box." |
+| 1:25–1:40 | Reload; the same run and ordered history return | "A refresh reuses the same run ID and replays only missing ordered events. Completed waves survive an API restart." |
+| 1:40–2:00 | Affected inventory and conflict/resolved events | "Qwen extracts the criteria and reasons over matches. The orchestrator resolves disagreement against authoritative inventory before action." |
+| 2:00–2:20 | Tasks and customer notice | "It creates removal, quarantine, and disposal tasks and drafts a customer notice with Qwen." |
+| 2:20–2:40 | Evidence review gate | "Critical release steps require human approval. The idempotent ledger survives restarts and packet regeneration." |
+| 2:40–2:52 | Management briefing and memory | "It briefs management and remembers supplier aliases and prior decisions for the next recall." |
+| 2:52–3:00 | Evidence packet and public URL | "The result is an audit-ready packet, running on Alibaba Cloud and powered by Qwen." |
 
 ## Key lines to land
 
@@ -34,4 +37,5 @@ runs in deterministic fallback and still shows the full flow.
   agent step."
 - "Qwen drives extraction, reasoning, risk, comms, and the briefing; a
   deterministic core keeps it reliable."
-- "Durable memory and an idempotent review ledger make it production-ready."
+- "Durable run history, memory, and an idempotent review ledger make the
+  workflow recoverable and auditable."

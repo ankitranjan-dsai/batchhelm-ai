@@ -16,6 +16,11 @@ services:
       LOG_LEVEL: info
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-120}
+      REVIEWER_ROLE: ${REVIEWER_ROLE:-Operations Manager}
+      DATABASE_PATH: /data/batchhelm.db
+      MEMORY_PATH: /data/batchhelm-memory.db
+      ORCHESTRATION_DATABASE_PATH: /data/orchestration.db
+      UPLOAD_DIR: /data/uploads
     volumes:
       - batchhelm-data:/data
     ports:

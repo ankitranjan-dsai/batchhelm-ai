@@ -15,6 +15,7 @@ QWEN_API_KEY=your-model-studio-key
 QWEN_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
 QWEN_TEXT_MODEL=qwen-plus
 QWEN_VISION_MODEL=qwen-vl-plus
+ORCHESTRATION_DATABASE_PATH=./data/orchestration.db
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
@@ -53,8 +54,11 @@ This is surfaced everywhere — API fields, agent events, and the dashboard badg
 ## Provider Surface (API)
 
 - `GET /api/qwen/status` — provider mode + configured models
-- `POST /api/incidents/demo/run` — full multi-agent run (Qwen-driven)
-- `GET /api/incidents/demo/run/stream` — live SSE event stream
+- `POST /api/incidents/demo/runs` — idempotently starts one durable Qwen-driven run
+- `GET /api/orchestration/runs/{run_id}` — persisted run status and result
+- `GET /api/orchestration/runs/{run_id}/events` — ordered replay plus live SSE
+- `POST /api/incidents/demo/run` — synchronous compatibility run
+- `GET /api/incidents/demo/run/stream` — deprecated compatibility stream
 - `POST /api/briefing/demo` — management briefing
 - `GET /api/inspections/demo`, `POST /api/inspections/shelf-photo` — vision
 - `POST /api/qwen/recall-summary` — single-shot structured summary

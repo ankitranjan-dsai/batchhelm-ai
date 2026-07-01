@@ -48,7 +48,7 @@ Wave 6: Compliance Evidence Agent
 - **23 units** quarantined across 2 stores
 - Evidence packet readiness **64%** (blocked on disposal records + customer comms)
 - Customer notice drafted, awaiting reviewer approval at the evidence gate
-- Management briefing produced by the AI Showrunner step
+- Management briefing produced by the orchestrator
 
 ## Conflict reconciliation
 

@@ -6,8 +6,9 @@ deferred. This is a hackathon build, not a finished commercial product.
 ## What is real
 
 - A real agent society (9 specialists + orchestrator) running as a DAG with
-  parallel waves, retries, failure isolation, durable per-agent checkpoints, and
-  live event streaming.
+  parallel waves, retries, failure isolation, typed per-wave checkpoints,
+  persist-before-publish ordered events, SSE replay/reconnect, and restart
+  recovery that skips completed waves.
 - Qwen drives recall extraction, inventory-match reasoning, risk classification,
   customer-notice drafting, shelf-photo interpretation, and the management
   briefing. Every output is validated against a Pydantic schema and falls back
@@ -16,7 +17,7 @@ deferred. This is a hackathon build, not a finished commercial product.
   idempotent, append-only review ledger that survives restarts.
 - Production hardening: structured JSON logs, request IDs, fixed-window rate
   limiting, provider retries with telemetry, sanitized errors, upload limits.
-- Docker images, Compose, CI, and an Alibaba Cloud deployment path.
+- Docker images, Compose, CI, and a documented Alibaba Cloud deployment path.
 
 ## Limitations
 
@@ -29,20 +30,22 @@ deferred. This is a hackathon build, not a finished commercial product.
 - **Authentication is simulated.** Reviewer identity is a configurable role
   (`REVIEWER_ROLE`), not real auth. There is no user login or RBAC yet.
 - **Memory is SQLite.** The repository layer is Postgres-ready (interface-based)
-  but the Postgres adapter is not implemented; multi-node deployments would need
-  it or a shared volume.
+  but the Postgres adapter is not implemented. Orchestration worker ownership is
+  also single-process; multi-node deployments need shared storage and
+  distributed claims or leases.
 - **Vision uses a placeholder image in the demo run.** The shelf-photo endpoint
   accepts real uploads, but the orchestration demo passes a placeholder so runs
   are deterministic.
-- **No automated browser/E2E tests.** Frontend is covered by typecheck + build;
-  backend has unit/integration/orchestration tests. Playwright E2E is future work.
+- **No automated browser/E2E tests.** Frontend reducers and lifecycle hooks have
+  Vitest coverage and the UI has been manually checked at desktop/mobile sizes;
+  Playwright E2E remains future work.
 - **Rate limiting is per-process, in-memory.** Fine for a single instance; a
   shared store (e.g., Redis) would be needed behind a load balancer.
 
 ## Future work
 
 1. Real recall-notice ingestion (email/PDF) with Qwen document parsing.
-2. Postgres (ApsaraDB RDS) adapter for the review ledger and memory.
+2. Postgres (ApsaraDB RDS) adapters and distributed orchestration ownership.
 3. Authentication + reviewer RBAC.
 4. Multi-incident dashboard and queue.
 5. Playwright end-to-end tests and load testing.
