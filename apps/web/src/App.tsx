@@ -34,6 +34,7 @@ import {
   fetchEvidencePacket,
   fetchEvidenceReview,
   submitReviewDecision,
+  toIncident,
   uploadShelfPhoto,
   type ProviderStatus,
   type ShelfInspectionResult,
@@ -41,6 +42,7 @@ import {
 import { demoIncident } from "./data/demoIncident";
 import { EvidenceReviewGate } from "./EvidenceReviewGate";
 import { MissionControl } from "./MissionControl";
+import { useOrchestrationRun } from "./useOrchestrationRun";
 import type {
   AgentActivity,
   EvidenceItem,
@@ -74,6 +76,8 @@ type InspectionState = "idle" | "loading" | "ready" | "error";
 type PacketState = "idle" | "loading" | "ready" | "error";
 
 export function App() {
+  const { session: orchestration, rerun: rerunOrchestration } =
+    useOrchestrationRun();
   const [activeNav, setActiveNav] = useState("Recalls");
   const [storeFilter, setStoreFilter] = useState<StoreFilter>("all");
   const [incident, setIncident] = useState<RecallIncident>(demoIncident);
@@ -101,10 +105,7 @@ export function App() {
         if (!active) {
           return;
         }
-        setIncident(sync.incident);
-        setTasks(sync.incident.tasks);
         setProvider(sync.provider);
-        setSyncState("connected");
       })
       .catch(() => {
         if (active) {
@@ -116,6 +117,17 @@ export function App() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (orchestration.result) {
+      const nextIncident = toIncident(orchestration.result.analysis);
+      setIncident(nextIncident);
+      setTasks(nextIncident.tasks);
+      setSyncState("connected");
+    } else if (orchestration.connection === "failed") {
+      setSyncState("offline");
+    }
+  }, [orchestration.connection, orchestration.result]);
 
   const filteredInventory = useMemo(() => {
     if (storeFilter === "all") {
@@ -239,7 +251,10 @@ export function App() {
             />
           </section>
           <section aria-label="Agent mission control">
-            <MissionControl />
+            <MissionControl
+              session={orchestration}
+              onRerun={rerunOrchestration}
+            />
           </section>
           <section className="lower-grid" aria-label="Recall operations progress">
             <TaskBoard tasks={tasks} onToggleTask={toggleTask} />

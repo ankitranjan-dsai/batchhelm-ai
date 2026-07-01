@@ -16,7 +16,6 @@ import type {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 export const evidencePacketDownloadUrl = `${API_BASE_URL}/api/evidence/demo-packet.md`;
-export const orchestrationStreamUrl = `${API_BASE_URL}/api/incidents/demo/run/stream`;
 
 export type OutputSource = "qwen" | "deterministic" | "memory" | "reviewer";
 
@@ -87,6 +86,14 @@ export interface OrchestrationResult {
   summary: string;
 }
 
+export interface OrchestrationRunAccepted {
+  run_id: string;
+  incident_id: string;
+  status: "pending" | "running" | "completed" | "failed";
+  events_url: string;
+  result_url: string;
+}
+
 export interface MemoryRecord {
   id: string;
   kind: string;
@@ -139,7 +146,6 @@ export interface ProviderStatus {
 }
 
 export interface DashboardSync {
-  incident: RecallIncident;
   provider: ProviderStatus;
 }
 
@@ -165,38 +171,37 @@ export interface ShelfInspectionResult {
 }
 
 export async function fetchDashboardSync(): Promise<DashboardSync> {
-  // Source the dashboard from a real multi-agent orchestration run so the
-  // agent, insight, and workflow panels reflect actual agent output rather
-  // than static data.
-  const [runResponse, providerResponse] = await Promise.all([
-    fetch(`${API_BASE_URL}/api/incidents/demo/run`, { method: "POST" }),
-    fetch(`${API_BASE_URL}/api/qwen/status`),
-  ]);
-
-  if (!runResponse.ok) {
-    throw new Error(`Orchestration run failed with ${runResponse.status}`);
-  }
+  const providerResponse = await fetch(`${API_BASE_URL}/api/qwen/status`);
   if (!providerResponse.ok) {
     throw new Error(`Provider request failed with ${providerResponse.status}`);
   }
 
-  const run = (await runResponse.json()) as OrchestrationResult;
   const provider = (await providerResponse.json()) as ProviderStatus;
-
-  return {
-    incident: toIncident(run.analysis),
-    provider,
-  };
+  return { provider };
 }
 
-export async function runOrchestration(): Promise<OrchestrationResult> {
-  const response = await fetch(`${API_BASE_URL}/api/incidents/demo/run`, {
+export async function startDemoRun(
+  requestId: string,
+): Promise<OrchestrationRunAccepted> {
+  const response = await fetch(`${API_BASE_URL}/api/incidents/demo/runs`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ request_id: requestId }),
   });
   if (!response.ok) {
-    throw new Error(`Orchestration run failed with ${response.status}`);
+    throw new Error(`Run start failed with ${response.status}`);
   }
-  return (await response.json()) as OrchestrationResult;
+  return (await response.json()) as OrchestrationRunAccepted;
+}
+
+export function orchestrationEventsUrl(
+  accepted: OrchestrationRunAccepted,
+  after = 0,
+): string {
+  const base = accepted.events_url.startsWith("http")
+    ? accepted.events_url
+    : `${API_BASE_URL}${accepted.events_url}`;
+  return after > 0 ? `${base}?after=${after}` : base;
 }
 
 export async function fetchMemoryRecords(): Promise<MemoryRecord[]> {
@@ -274,7 +279,7 @@ export async function submitReviewDecision(
   return (await response.json()) as EvidenceReviewState;
 }
 
-function toIncident(analysis: BackendAnalysis): RecallIncident {
+export function toIncident(analysis: BackendAnalysis): RecallIncident {
   const metrics: RecallMetric[] = [
     {
       label: "Risk Level",
