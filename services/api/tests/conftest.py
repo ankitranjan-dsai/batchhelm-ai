@@ -22,6 +22,12 @@ def make_settings(api_key: str = "", **overrides: object) -> Settings:
         "ORCHESTRATION_DATABASE_PATH": (
             Path(gettempdir()) / f"batchhelm-orchestration-test-{uuid4().hex}.db"
         ),
+        "INTAKE_DATABASE_PATH": (
+            Path(gettempdir()) / f"batchhelm-intake-test-{uuid4().hex}.db"
+        ),
+        "UPLOAD_DIR": (
+            Path(gettempdir()) / f"batchhelm-upload-test-{uuid4().hex}"
+        ),
     }
     base.update(overrides)
     return Settings(**base)  # type: ignore[arg-type]

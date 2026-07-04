@@ -228,7 +228,7 @@ class ExtractedLabel(BaseModel):
 class ShelfInspectionResult(BaseModel):
     upload: UploadMetadata
     extracted: ExtractedLabel
-    recall_match: bool
+    recall_match: bool | None
     recommended_action: str
     review_required: bool
     evidence_note: str
