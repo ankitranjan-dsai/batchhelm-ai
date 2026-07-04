@@ -158,4 +158,26 @@ describe("useOrchestrationRun", () => {
       "request-2",
     ]);
   });
+
+  it("adopts an intake run without starting another demo run", async () => {
+    const start = vi.spyOn(api, "startDemoRun").mockResolvedValue(accepted);
+    const { result } = renderHook(() => useOrchestrationRun());
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
+    const intakeAccepted = {
+      ...accepted,
+      run_id: "run-intake",
+      incident_id: "incident-intake",
+      events_url: "/api/orchestration/runs/run-intake/events",
+      result_url: "/api/orchestration/runs/run-intake",
+    };
+
+    act(() => result.current.adoptRun(intakeAccepted));
+
+    await waitFor(() => {
+      expect(MockEventSource.instances.at(-1)?.url).toContain(
+        intakeAccepted.run_id,
+      );
+    });
+    expect(start).toHaveBeenCalledTimes(1);
+  });
 });

@@ -123,7 +123,17 @@ export function useOrchestrationRun() {
     setGeneration((value) => value + 1);
   }, []);
 
-  return { session, rerun };
+  const adoptRun = useCallback((accepted: OrchestrationRunAccepted) => {
+    sessionStorage.setItem(
+      ORCHESTRATION_SESSION_KEY,
+      JSON.stringify(accepted),
+    );
+    sessionStorage.removeItem(ORCHESTRATION_REQUEST_KEY);
+    dispatch({ type: "reset" });
+    setGeneration((value) => value + 1);
+  }, []);
+
+  return { session, rerun, adoptRun };
 }
 
 function startRunOnce(): Promise<OrchestrationRunAccepted> {

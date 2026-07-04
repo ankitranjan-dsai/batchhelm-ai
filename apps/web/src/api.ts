@@ -162,12 +162,232 @@ export interface ShelfInspectionResult {
     best_by: string | null;
     confidence: number;
   };
-  recall_match: boolean;
+  recall_match: boolean | null;
   recommended_action: string;
   review_required: boolean;
   evidence_note: string;
   provider: string;
   used_fallback: boolean;
+}
+
+export type IntakeStatus =
+  | "uploaded"
+  | "extracting"
+  | "review_required"
+  | "ready"
+  | "run_started"
+  | "failed";
+
+export interface InventoryItem {
+  id: string;
+  store: string;
+  sku: string;
+  product: string;
+  lot: string;
+  upc: string;
+  on_hand: number;
+  location: string;
+  supplier_alias: string;
+}
+
+export interface RecallCriteriaDraft {
+  product_name: string;
+  affected_lots: string[];
+  upcs: string[];
+  risk_level: "low" | "medium" | "high" | "critical" | null;
+  reason: string;
+  source: string;
+}
+
+export interface InventoryImportSummary {
+  accepted_rows: number;
+  rejected_rows: number;
+  stores: number;
+  mapped_headers: Record<string, string>;
+  warnings: string[];
+}
+
+export interface RecallIncidentDraft {
+  criteria: RecallCriteriaDraft;
+  notice_text: string;
+  inventory: InventoryItem[];
+  stores: string[];
+  import_summary: InventoryImportSummary;
+  shelf_inspection: ShelfInspectionResult | null;
+  review_required: boolean;
+}
+
+export interface PublicIntakeArtifact {
+  id: string;
+  role: "recall_notice" | "inventory_csv" | "shelf_photo";
+  original_filename: string;
+  media_type: string;
+  size_bytes: number;
+  sha256: string;
+}
+
+export interface IntakeFieldEvidence {
+  id: string;
+  intake_id: string;
+  field_path: string;
+  value: unknown;
+  artifact_id: string | null;
+  locator: string;
+  source: OutputSource;
+  confidence: number;
+  requires_review: boolean;
+  supersedes_id: string | null;
+  created_at: string;
+}
+
+export interface IntakeAccepted {
+  intake_id: string;
+  status: IntakeStatus;
+  status_url: string;
+  created_at: string;
+}
+
+export interface IntakeView {
+  intake_id: string;
+  status: IntakeStatus;
+  version: number;
+  provider_mode: string;
+  created_at: string;
+  updated_at: string;
+  artifacts: PublicIntakeArtifact[];
+  draft: RecallIncidentDraft | null;
+  evidence: IntakeFieldEvidence[];
+  incident_id: string | null;
+  run_id: string | null;
+  error_code: string | null;
+  error_message: string | null;
+}
+
+export interface IntakeDraftUpdate {
+  request_id: string;
+  expected_version: number;
+  criteria: RecallCriteriaDraft;
+  inventory: InventoryItem[];
+}
+
+export interface IntakeConfirmRequest {
+  request_id: string;
+  expected_version: number;
+}
+
+export interface IntakeRunAccepted {
+  intake: IntakeView;
+  run: OrchestrationRunAccepted;
+}
+
+interface APIErrorPayload {
+  code?: string;
+  message?: string;
+}
+
+export class APIRequestError extends Error {
+  readonly status: number;
+  readonly code: string;
+
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.name = "APIRequestError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export async function createIntakePacket(
+  requestId: string,
+  notice: File,
+  inventory: File,
+  shelfPhoto?: File,
+): Promise<IntakeAccepted> {
+  const formData = new FormData();
+  formData.append("request_id", requestId);
+  formData.append("notice", notice);
+  formData.append("inventory", inventory);
+  if (shelfPhoto !== undefined) {
+    formData.append("shelf_photo", shelfPhoto);
+  }
+  const response = await fetch(`${API_BASE_URL}/api/intakes`, {
+    method: "POST",
+    body: formData,
+  });
+  return responseJson<IntakeAccepted>(response, "Intake upload failed.");
+}
+
+export async function fetchIntake(
+  statusUrl: string,
+  signal?: AbortSignal,
+): Promise<IntakeView> {
+  const url = statusUrl.startsWith("http")
+    ? statusUrl
+    : `${API_BASE_URL}${statusUrl}`;
+  const response = await fetch(url, { signal });
+  return responseJson<IntakeView>(response, "Intake status request failed.");
+}
+
+export async function updateIntakeDraft(
+  intakeId: string,
+  request: IntakeDraftUpdate,
+): Promise<IntakeView> {
+  const response = await fetch(`${API_BASE_URL}/api/intakes/${intakeId}/draft`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  return responseJson<IntakeView>(response, "Intake update failed.");
+}
+
+export async function confirmIntake(
+  intakeId: string,
+  request: IntakeConfirmRequest,
+): Promise<IntakeView> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/intakes/${intakeId}/confirm`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  return responseJson<IntakeView>(response, "Intake confirmation failed.");
+}
+
+export async function startIntakeRun(
+  intakeId: string,
+  requestId: string,
+): Promise<IntakeRunAccepted> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/intakes/${intakeId}/runs`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ request_id: requestId }),
+    },
+  );
+  return responseJson<IntakeRunAccepted>(response, "Agent launch failed.");
+}
+
+async function responseJson<T>(
+  response: Response,
+  fallbackMessage: string,
+): Promise<T> {
+  if (response.ok) {
+    return (await response.json()) as T;
+  }
+  let payload: APIErrorPayload = {};
+  try {
+    payload = (await response.json()) as APIErrorPayload;
+  } catch {
+    // The public fallback remains stable when an upstream response is not JSON.
+  }
+  throw new APIRequestError(
+    response.status,
+    payload.code ?? "request_failed",
+    payload.message ?? fallbackMessage,
+  );
 }
 
 export async function fetchDashboardSync(): Promise<DashboardSync> {
