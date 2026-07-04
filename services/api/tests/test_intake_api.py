@@ -1,0 +1,194 @@
+from __future__ import annotations
+
+import time
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from batchhelm_api.app import create_app
+from batchhelm_api.intake_repository import IntakeStoreUnavailable
+from tests.conftest import make_settings
+
+NOTICE = (
+    b"Spinach 10 oz\n"
+    b"Central Farms supplier alert\n"
+    b"Affected lot L2418\n"
+    b"UPC 008500001010. Possible contamination risk.\n"
+)
+CSV = (
+    b"store,sku,product,lot,upc,on_hand,location,supplier\n"
+    b"Store A,SPN10Z,Spinach 10 oz,L2418,008500001010,6,"
+    b"Cooler,Central Farms\n"
+)
+
+
+class FailingIntakeRepository:
+    def initialize(self) -> None:
+        raise IntakeStoreUnavailable(
+            "database unavailable at /private/secret/intake.db"
+        )
+
+
+def make_client(
+    tmp_path: Path,
+    *,
+    intake_repository: object | None = None,
+) -> TestClient:
+    settings = make_settings(
+        INTAKE_DATABASE_PATH=tmp_path / "intake.db",
+        UPLOAD_DIR=tmp_path / "uploads",
+    )
+    return TestClient(
+        create_app(
+            settings=settings,
+            intake_repository=intake_repository,  # type: ignore[arg-type]
+        )
+    )
+
+
+def create_intake(
+    client: TestClient,
+    request_id: str = "0d05fc09-d47c-43aa-9f01-b021b26f0ac8",
+):
+    return client.post(
+        "/api/intakes",
+        data={"request_id": request_id},
+        files={
+            "notice": ("notice.txt", NOTICE, "text/plain"),
+            "inventory": ("inventory.csv", CSV, "text/csv"),
+        },
+    )
+
+
+def wait_for_intake(
+    client: TestClient,
+    status_url: str,
+) -> dict[str, object]:
+    for _attempt in range(100):
+        response = client.get(status_url)
+        assert response.status_code == 200
+        payload = response.json()
+        if payload["status"] not in {"uploaded", "extracting"}:
+            return payload
+        time.sleep(0.01)
+    raise AssertionError("Intake did not finish processing.")
+
+
+def test_create_intake_returns_202_and_reviewable_status(
+    tmp_path: Path,
+) -> None:
+    with make_client(tmp_path) as client:
+        response = create_intake(client)
+
+        assert response.status_code == 202
+        accepted = response.json()
+        view = wait_for_intake(client, accepted["status_url"])
+
+    assert view["status"] == "review_required"
+    draft = view["draft"]
+    assert isinstance(draft, dict)
+    assert draft["criteria"]["affected_lots"] == ["L2418"]
+    assert draft["import_summary"]["accepted_rows"] == 1
+
+
+def test_identical_create_request_returns_same_intake(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client:
+        first = create_intake(client)
+        replay = create_intake(client)
+
+    assert first.status_code == 202
+    assert replay.status_code == 202
+    assert replay.json()["intake_id"] == first.json()["intake_id"]
+
+
+def test_review_update_and_confirmation_are_versioned(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client:
+        accepted = create_intake(client).json()
+        review = wait_for_intake(client, accepted["status_url"])
+        draft = review["draft"]
+        assert isinstance(draft, dict)
+        criteria = dict(draft["criteria"])
+        criteria["product_name"] = "Baby Spinach 10 oz"
+        updated_response = client.patch(
+            f"/api/intakes/{accepted['intake_id']}/draft",
+            json={
+                "request_id": "1d05fc09-d47c-43aa-9f01-b021b26f0ac8",
+                "expected_version": review["version"],
+                "criteria": criteria,
+                "inventory": draft["inventory"],
+            },
+        )
+        assert updated_response.status_code == 200
+        updated = updated_response.json()
+
+        confirmed_response = client.post(
+            f"/api/intakes/{accepted['intake_id']}/confirm",
+            json={
+                "request_id": "2d05fc09-d47c-43aa-9f01-b021b26f0ac8",
+                "expected_version": updated["version"],
+            },
+        )
+
+    assert updated["version"] == review["version"] + 1
+    assert updated["evidence"][-1]["source"] == "reviewer"
+    assert confirmed_response.status_code == 200
+    assert confirmed_response.json()["status"] == "ready"
+    assert confirmed_response.json()["incident_id"]
+
+
+def test_missing_intake_returns_structured_404(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client:
+        response = client.post(
+            "/api/intakes/missing/confirm",
+            json={
+                "request_id": "3d05fc09-d47c-43aa-9f01-b021b26f0ac8",
+                "expected_version": 0,
+            },
+        )
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "intake_not_found"
+
+
+def test_packet_over_limit_returns_413_without_paths(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client:
+        response = client.post(
+            "/api/intakes",
+            data={
+                "request_id": "4d05fc09-d47c-43aa-9f01-b021b26f0ac8"
+            },
+            files={
+                "notice": (
+                    "notice.txt",
+                    b"x" * (12 * 1024 * 1024 + 1),
+                    "text/plain",
+                ),
+                "inventory": ("inventory.csv", CSV, "text/csv"),
+            },
+        )
+
+    assert response.status_code == 413
+    assert response.json()["code"] == "upload_too_large"
+    assert "/tmp/" not in response.text
+    assert "/private/" not in response.text
+
+
+def test_intake_store_failure_does_not_break_health(tmp_path: Path) -> None:
+    with make_client(
+        tmp_path,
+        intake_repository=FailingIntakeRepository(),
+    ) as client:
+        health = client.get("/health")
+        response = create_intake(
+            client,
+            request_id="5d05fc09-d47c-43aa-9f01-b021b26f0ac8",
+        )
+
+    assert health.status_code == 200
+    assert response.status_code == 503
+    assert response.json() == {
+        "code": "intake_store_unavailable",
+        "message": "Incident intake is temporarily unavailable.",
+        "details": None,
+    }
+    assert "/private/secret" not in response.text

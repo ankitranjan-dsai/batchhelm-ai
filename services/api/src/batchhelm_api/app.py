@@ -1,19 +1,47 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
-from typing import Any
+from contextlib import asynccontextmanager, suppress
+from typing import Annotated, Any
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from batchhelm_api import inspection
 from batchhelm_api.agents import Orchestrator
 from batchhelm_api.config import Settings, get_settings
 from batchhelm_api.evidence_packet import build_demo_shelf_inspection, build_evidence_packet
+from batchhelm_api.intake_models import (
+    IntakeAccepted,
+    IntakeConfirmRequest,
+    IntakeCreateRequest,
+    IntakeDraftUpdate,
+    IntakeView,
+)
+from batchhelm_api.intake_repository import (
+    IntakeIdempotencyConflict,
+    IntakeNotFound,
+    IntakeRepository,
+    IntakeStateConflict,
+    IntakeStoreUnavailable,
+    IntakeVersionConflict,
+    SQLiteIntakeRepository,
+    UnavailableIntakeRepository,
+)
+from batchhelm_api.intake_service import (
+    CreateIntakeCommand,
+    IntakeProcessingFailed,
+    IntakeService,
+    IntakeUpload,
+    IntakeValidationFailed,
+)
+from batchhelm_api.intake_storage import (
+    IntakePacketTooLarge,
+    IntakeUploadInvalid,
+)
 from batchhelm_api.memory_repository import (
     MemoryRepository,
     MemoryStoreUnavailable,
@@ -86,6 +114,7 @@ def create_app(
     review_repository: ReviewRepository | None = None,
     memory_repository: MemoryRepository | None = None,
     orchestration_repository: OrchestrationRepository | None = None,
+    intake_repository: IntakeRepository | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     configure_logging(resolved_settings.log_level)
@@ -118,6 +147,21 @@ def create_app(
     except OrchestrationStoreUnavailable as exc:
         orchestration_store = UnavailableOrchestrationRepository(exc)
 
+    intake_store = (
+        intake_repository
+        or SQLiteIntakeRepository(resolved_settings.intake_database_path)
+    )
+    try:
+        intake_store.initialize()
+    except IntakeStoreUnavailable as exc:
+        intake_store = UnavailableIntakeRepository(exc)
+
+    intake_service = IntakeService(
+        repository=intake_store,
+        artifact_root=resolved_settings.upload_dir,
+        gateway_factory=lambda: QwenGateway(resolved_settings),
+    )
+
     def build_orchestrator() -> Orchestrator:
         return Orchestrator(
             gateway=QwenGateway(resolved_settings),
@@ -132,6 +176,8 @@ def create_app(
 
     @asynccontextmanager
     async def app_lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        with suppress(IntakeStoreUnavailable):
+            await intake_service.recover()
         await orchestration_service.recover(build_demo_incident)
         yield
 
@@ -147,6 +193,7 @@ def create_app(
     app.state.review_service = review_service
     app.state.memory = memory
     app.state.orchestration_service = orchestration_service
+    app.state.intake_service = intake_service
     app.state.telemetry = telemetry
 
     # Inner middleware first; CORS added last so it stays outermost and always
@@ -264,6 +311,123 @@ def create_app(
             ).model_dump(),
         )
 
+    @app.exception_handler(IntakeNotFound)
+    async def intake_not_found_handler(
+        _request: Request,
+        _exc: IntakeNotFound,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=404,
+            content=APIError(
+                code="intake_not_found",
+                message="Incident intake was not found.",
+            ).model_dump(),
+        )
+
+    @app.exception_handler(IntakeIdempotencyConflict)
+    async def intake_idempotency_handler(
+        _request: Request,
+        _exc: IntakeIdempotencyConflict,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content=APIError(
+                code="idempotency_conflict",
+                message="Request ID was already used for another intake operation.",
+            ).model_dump(),
+        )
+
+    @app.exception_handler(IntakeStateConflict)
+    async def intake_state_handler(
+        _request: Request,
+        _exc: IntakeStateConflict,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content=APIError(
+                code="intake_state_conflict",
+                message="Incident intake is not in the required state.",
+            ).model_dump(),
+        )
+
+    @app.exception_handler(IntakeVersionConflict)
+    async def intake_version_handler(
+        _request: Request,
+        _exc: IntakeVersionConflict,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content=APIError(
+                code="intake_version_conflict",
+                message="Incident intake was updated by another reviewer.",
+            ).model_dump(),
+        )
+
+    @app.exception_handler(IntakePacketTooLarge)
+    async def intake_packet_too_large_handler(
+        _request: Request,
+        _exc: IntakePacketTooLarge,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=413,
+            content=APIError(
+                code="upload_too_large",
+                message="Incident intake files exceed the upload limit.",
+            ).model_dump(),
+        )
+
+    @app.exception_handler(IntakeUploadInvalid)
+    async def intake_upload_handler(
+        _request: Request,
+        _exc: IntakeUploadInvalid,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=400,
+            content=APIError(
+                code="invalid_upload",
+                message="Incident intake files could not be accepted.",
+            ).model_dump(),
+        )
+
+    @app.exception_handler(IntakeValidationFailed)
+    async def intake_validation_handler(
+        _request: Request,
+        exc: IntakeValidationFailed,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content=APIError(
+                code="intake_validation_failed",
+                message=str(exc),
+            ).model_dump(),
+        )
+
+    @app.exception_handler(IntakeStoreUnavailable)
+    async def intake_store_handler(
+        _request: Request,
+        _exc: IntakeStoreUnavailable,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content=APIError(
+                code="intake_store_unavailable",
+                message="Incident intake is temporarily unavailable.",
+            ).model_dump(),
+        )
+
+    @app.exception_handler(IntakeProcessingFailed)
+    async def intake_processing_handler(
+        _request: Request,
+        _exc: IntakeProcessingFailed,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=500,
+            content=APIError(
+                code="intake_processing_failed",
+                message="Incident intake could not be processed.",
+            ).model_dump(),
+        )
+
     @app.exception_handler(ValueError)
     async def value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
         return JSONResponse(
@@ -283,6 +447,78 @@ def create_app(
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
         return HealthResponse(status="ok", service="batchhelm-api", version="0.2.0")
+
+    @app.post(
+        "/api/intakes",
+        response_model=IntakeAccepted,
+        status_code=202,
+    )
+    async def create_intake(
+        request_id: Annotated[str, Form()],
+        notice: Annotated[UploadFile, File()],
+        inventory: Annotated[UploadFile, File()],
+        shelf_photo: Annotated[UploadFile | None, File()] = None,
+        service: IntakeService = Depends(get_intake_service),
+    ) -> IntakeAccepted:
+        try:
+            parsed_request = IntakeCreateRequest(request_id=request_id)
+        except ValidationError as exc:
+            raise IntakeValidationFailed(
+                "Request ID must be a valid UUID."
+            ) from exc
+        telemetry.increment("intake_packets")
+        return await service.create(
+            CreateIntakeCommand(
+                request_id=str(parsed_request.request_id),
+                notice=IntakeUpload(
+                    filename=notice.filename or "recall-notice",
+                    media_type=notice.content_type or "application/octet-stream",
+                    stream=notice.file,
+                ),
+                inventory=IntakeUpload(
+                    filename=inventory.filename or "inventory.csv",
+                    media_type=(
+                        inventory.content_type or "application/octet-stream"
+                    ),
+                    stream=inventory.file,
+                ),
+                shelf_photo=(
+                    IntakeUpload(
+                        filename=shelf_photo.filename or "shelf-photo",
+                        media_type=(
+                            shelf_photo.content_type
+                            or "application/octet-stream"
+                        ),
+                        stream=shelf_photo.file,
+                    )
+                    if shelf_photo is not None
+                    else None
+                ),
+            )
+        )
+
+    @app.get("/api/intakes/{intake_id}", response_model=IntakeView)
+    async def get_intake(
+        intake_id: str,
+        service: IntakeService = Depends(get_intake_service),
+    ) -> IntakeView:
+        return service.get(intake_id)
+
+    @app.patch("/api/intakes/{intake_id}/draft", response_model=IntakeView)
+    async def update_intake_draft(
+        intake_id: str,
+        request: IntakeDraftUpdate,
+        service: IntakeService = Depends(get_intake_service),
+    ) -> IntakeView:
+        return service.update_draft(intake_id, request)
+
+    @app.post("/api/intakes/{intake_id}/confirm", response_model=IntakeView)
+    async def confirm_intake(
+        intake_id: str,
+        request: IntakeConfirmRequest,
+        service: IntakeService = Depends(get_intake_service),
+    ) -> IntakeView:
+        return service.confirm(intake_id, request)
 
     @app.get("/api/incidents/demo", response_model=RecallIncidentInput)
     async def get_demo_incident() -> RecallIncidentInput:
@@ -540,6 +776,10 @@ def get_orchestrator(request: Request) -> Orchestrator:
 
 def get_orchestration_service(request: Request) -> OrchestrationService:
     return request.app.state.orchestration_service
+
+
+def get_intake_service(request: Request) -> IntakeService:
+    return request.app.state.intake_service
 
 
 app = create_app()
