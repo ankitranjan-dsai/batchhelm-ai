@@ -81,7 +81,7 @@ def upload_sample_packet(
                 (SAMPLE_DATA / inventory_name).read_bytes(),
                 "text/csv",
             ),
-            "shelf_evidence": (
+            "shelf_photo": (
                 "store-b-cooler-spinach.png",
                 (SAMPLE_DATA / "store-b-cooler-spinach.png").read_bytes(),
                 "image/png",
@@ -295,6 +295,11 @@ def test_sample_packet_reaches_review_and_matches_demo_totals(
         view = wait_for_intake(client, response.json()["status_url"])
 
     assert view["status"] == "review_required"
+    assert {artifact["role"] for artifact in view["artifacts"]} == {
+        "recall_notice",
+        "inventory_csv",
+        "shelf_photo",
+    }
     assert view["draft"]["import_summary"]["accepted_rows"] == 6
     assert sum(
         row["on_hand"] for row in view["draft"]["inventory"]
