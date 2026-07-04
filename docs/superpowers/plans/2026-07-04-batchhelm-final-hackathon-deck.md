@@ -593,7 +593,7 @@ mkdir -p "$TMP/checkpoint-1"
 
 Inspect every full-size slide. Expected: no title wrap, screenshot blur, screenshot reuse with the same crop, hidden provenance, or overlapping text.
 
-- [ ] **Step 6: Commit and push the first narrative checkpoint**
+- [x] **Step 6: Commit and push the first narrative checkpoint**
 
 Run:
 
@@ -616,7 +616,7 @@ Expected: one meaningful binary deck commit authored by Ankit Ranjan is visible 
 - Modify: `docs/presentation/batchhelm-ai-hackathon-deck.pptx`
 - Create outside repository: `$TMP/checkpoint-2/`
 
-- [ ] **Step 1: Explain Qwen's specific responsibilities**
+- [x] **Step 1: Explain Qwen's specific responsibilities**
 
 Implement slide 5 with six responsibilities:
 
@@ -634,7 +634,7 @@ Bounded retries · Literal fallback · Reviewer escalation
 
 Do not imply that a live provider run or provider latency has been captured.
 
-- [ ] **Step 2: Draw the six-wave Agent Society**
+- [x] **Step 2: Draw the six-wave Agent Society**
 
 On slide 6, create all connectors before nodes. Represent:
 
@@ -647,7 +647,7 @@ On slide 6, create all connectors before nodes. Represent:
 
 Show nine specialists across the six waves and use `mission-control-desktop.png` as supporting evidence, not as an unreadable full-screen thumbnail.
 
-- [ ] **Step 3: Draw the persistence architecture**
+- [x] **Step 3: Draw the persistence architecture**
 
 Implement slide 7 with four visibly separate responsibilities:
 
@@ -658,7 +658,7 @@ Implement slide 7 with four visibly separate responsibilities:
 
 Add concise labels for request UUID idempotency, persist-before-publish SSE, replay, typed checkpoints, and startup recovery. State `Current SQLite lifecycle: one API replica` exactly once.
 
-- [ ] **Step 4: Render and inspect slides 5-7**
+- [x] **Step 4: Render and inspect slides 5-7**
 
 Run:
 
