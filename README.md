@@ -135,7 +135,9 @@ The current dashboard implementation is visually tracked against:
 - `docs/design-assets/screenshots/dashboard-mobile.png`
 - `docs/design-assets/screenshots/mission-control-desktop.png`
 - `docs/design-assets/screenshots/mission-control-mobile.png`
-- `docs/design-assets/screenshots/intake-files-desktop.png`
+- [Populated intake files - desktop](docs/design-assets/screenshots/intake-files-desktop.png)
+- [Provenance and warning review - desktop](docs/design-assets/screenshots/intake-review-desktop.png)
+- [Inventory warning review - mobile](docs/design-assets/screenshots/intake-review-mobile.png)
 
 ## Run The Backend
 

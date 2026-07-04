@@ -13,7 +13,7 @@ Track: **Autopilot Agent** (primary), **Agent Society** (secondary).
 - [x] Durable real incident intake backend and committed sample packet
 - [x] Demo script (`docs/demo-script.md`)
 - [x] **Push the durable Mission Control milestone**
-- [ ] **Verify real ambiguous intake in desktop and mobile browsers** and capture populated review evidence
+- [x] **Verify real ambiguous intake in desktop and mobile browsers** and capture populated review evidence
 - [ ] **Deploy the backend on Alibaba Cloud** and capture verifiable service evidence
 - [ ] **Publish a working test URL** that remains available throughout judging
 - [ ] **Verify live Qwen mode** in the deployed app and capture model/source evidence
