@@ -97,6 +97,8 @@ class IntakeRepository(Protocol):
 
     def get_by_request(self, request_id: str) -> IntakeRecord | None: ...
 
+    def get_by_incident(self, incident_id: str) -> IntakeRecord | None: ...
+
     def list_intake_ids(self) -> set[str]: ...
 
     def create_intake(
@@ -175,6 +177,9 @@ class UnavailableIntakeRepository:
         return None
 
     def get_by_request(self, request_id: str) -> IntakeRecord | None:
+        self._raise()
+
+    def get_by_incident(self, incident_id: str) -> IntakeRecord | None:
         self._raise()
 
     def list_intake_ids(self) -> set[str]:
@@ -384,6 +389,21 @@ class SQLiteIntakeRepository:
                 row = connection.execute(
                     "SELECT id FROM intakes WHERE request_id = ?",
                     (request_id,),
+                ).fetchone()
+                return (
+                    self._record(connection, str(row["id"]))
+                    if row is not None
+                    else None
+                )
+        except self._storage_errors() as exc:
+            self._raise_unavailable(exc)
+
+    def get_by_incident(self, incident_id: str) -> IntakeRecord | None:
+        try:
+            with closing(self._connect()) as connection:
+                row = connection.execute(
+                    "SELECT id FROM intakes WHERE incident_id = ?",
+                    (incident_id,),
                 ).fetchone()
                 return (
                     self._record(connection, str(row["id"]))
