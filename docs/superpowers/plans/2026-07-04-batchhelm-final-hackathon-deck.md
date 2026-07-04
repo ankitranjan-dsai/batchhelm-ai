@@ -672,7 +672,7 @@ mkdir -p "$TMP/checkpoint-2"
 
 Expected: Qwen has concrete work, all nine agents and six waves are legible, connectors sit behind nodes, and persistence stores are not visually merged.
 
-- [ ] **Step 5: Commit and push the technical-depth checkpoint**
+- [x] **Step 5: Commit and push the technical-depth checkpoint**
 
 Run:
 
@@ -695,7 +695,7 @@ Expected: the second deck checkpoint is visible on `main`.
 - Modify: `docs/presentation/batchhelm-ai-hackathon-deck.pptx`
 - Create outside repository: `$TMP/checkpoint-3/`
 
-- [ ] **Step 1: Build the benchmark comparison**
+- [x] **Step 1: Build the benchmark comparison**
 
 Implement slide 8 with an editable native horizontal bar comparison:
 
@@ -712,7 +712,7 @@ Show `1.49x faster`, both resilience comparisons, and this disclosure in at leas
 Deterministic fallback benchmark; identical synthetic 180 ms delay per agent isolates orchestration strategy from provider latency.
 ```
 
-- [ ] **Step 2: Return to the sample incident**
+- [x] **Step 2: Return to the sample incident**
 
 Implement slide 9 with a fresh, readable Review crop, the cooler photo, and an evidence trail:
 
@@ -722,7 +722,7 @@ Notice → Confirmed snapshot → Durable run → 37 ordered events
 
 Show `2 stores`, `23 units`, `6 valid rows`, `2 safely rejected`, `5 lots`, and `1 optional shelf artifact`. Label the packet `Synthetic demo incident`.
 
-- [ ] **Step 3: Build the honest close**
+- [x] **Step 3: Build the honest close**
 
 Implement slide 10 with:
 
@@ -734,7 +734,7 @@ Implement slide 10 with:
 
 Do not show a public application URL or live-Qwen proof until those artifacts exist.
 
-- [ ] **Step 4: Render and inspect slides 8-10**
+- [x] **Step 4: Render and inspect slides 8-10**
 
 Run:
 
@@ -771,7 +771,7 @@ Expected: the full ten-slide narrative is visible on `main`.
 - Modify: `docs/presentation/batchhelm-ai-hackathon-deck.pptx`
 - Create outside repository: `$TMP/final-core.xml`
 
-- [ ] **Step 1: Check whether artifact export already replaced legacy metadata**
+- [x] **Step 1: Check whether artifact export already replaced legacy metadata**
 
 Run:
 
@@ -788,7 +788,7 @@ Acceptance:
 - subject is `Production-shaped recall autopilot`;
 - no `python-pptx`, `Steve Canny`, or third-party author-credit wording remains.
 
-- [ ] **Step 2: Use PowerPoint document properties if metadata is not clean**
+- [x] **Step 2: Use PowerPoint document properties if metadata is not clean**
 
 Create `$SCRATCH/set-deck-metadata.applescript`:
 
@@ -818,7 +818,11 @@ osascript "$SCRATCH/set-deck-metadata.applescript" "$DECK"
 
 Do not directly mutate PPTX OOXML.
 
-- [ ] **Step 3: Re-run metadata and attribution checks**
+Execution note: this conditional step ran because the artifact export did not
+contain the approved author properties. PowerPoint saved a replacement file
+with Ankit Ranjan as both creator and last modifier.
+
+- [x] **Step 3: Re-run metadata and attribution checks**
 
 Run:
 
@@ -860,7 +864,7 @@ Expected: no metadata-only change is left uncommitted.
 - Create outside repository: `$TMP/final-montage.png`
 - Create outside repository: `$TMP/qa/template-fidelity-check.json`
 
-- [ ] **Step 1: Render all ten final slides and create the montage**
+- [x] **Step 1: Render all ten final slides and create the montage**
 
 Run:
 
@@ -877,7 +881,7 @@ mkdir -p "$TMP/final-render"
 
 Inspect the montage first, then each full-resolution slide. Acceptance: exactly ten slides; no clipping, overlap, unreadable crop, fake UI, unsupported badge, or one-line title wrap.
 
-- [ ] **Step 2: Run overflow and overlap diagnostics**
+- [x] **Step 2: Run overflow and overlap diagnostics**
 
 Run:
 
@@ -887,7 +891,7 @@ Run:
 
 Expected: no overflow or unintended overlap errors. Review every intentional overlap reported for screenshots, bars, or diagram nodes.
 
-- [ ] **Step 3: Inspect placeholders and visible text**
+- [x] **Step 3: Inspect placeholders and visible text**
 
 Run:
 
@@ -901,7 +905,7 @@ rg -n -i "placeholder|lorem|todo|tbd|public url|live qwen|customer deployment" \
 
 Expected: no unresolved placeholder text and no unsupported live/deployment claim.
 
-- [ ] **Step 4: Validate template fidelity**
+- [x] **Step 4: Validate template fidelity**
 
 Run:
 
@@ -918,7 +922,7 @@ Run:
 
 Expected: all ten slide mappings pass and every added primitive remains inside its declared zone.
 
-- [ ] **Step 5: Verify final package structure and editability**
+- [x] **Step 5: Verify final package structure and editability**
 
 Run:
 
@@ -983,7 +987,7 @@ Expected:
 - the latest commit is authored by `Ankit Ranjan <ankit0ranjan@gmail.com>`;
 - the repository CI run for the final revision has started or completed successfully.
 
-- [ ] **Step 5: Record what this milestone does not complete**
+- [x] **Step 5: Record what this milestone does not complete**
 
 The overall hackathon submission remains open until these separately approved milestones are finished:
 
