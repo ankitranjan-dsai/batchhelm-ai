@@ -3,6 +3,7 @@ from __future__ import annotations
 from batchhelm_api.agents import Orchestrator
 from batchhelm_api.agents.base import Agent, AgentContext, AgentOutput, EventRecorder
 from batchhelm_api.agents.inventory import INVENTORY_MATCHING, SHELF_VISION
+from batchhelm_api.intake_models import IntakeArtifact, IntakeArtifactRole
 from batchhelm_api.memory_repository import InMemoryMemoryRepository
 from batchhelm_api.models import (
     AgentEventType,
@@ -46,6 +47,38 @@ async def test_inventory_and_vision_run_in_the_same_wave() -> None:
 
     matching_wave = next(w for w in wave_names if INVENTORY_MATCHING in w)
     assert SHELF_VISION in matching_wave  # genuine parallelism, not sequential
+
+
+async def test_real_shelf_fallback_names_artifact_without_inferring_match() -> None:
+    orchestrator = _orchestrator(fallback_gateway())
+    shelf_bytes = b"\x89PNG\r\n\x1a\n" + b"x" * 20
+    shelf_artifact = IntakeArtifact(
+        id="shelf-1",
+        intake_id="intake-1",
+        role=IntakeArtifactRole.shelf_photo,
+        original_filename="store-b-cooler-spinach.png",
+        stored_filename="shelf-1.png",
+        media_type="image/png",
+        size_bytes=len(shelf_bytes),
+        sha256="a" * 64,
+        relative_path="intakes/intake-1/shelf-1.png",
+        created_at="2026-07-04T08:00:00+00:00",
+    )
+
+    result = await orchestrator.run(
+        build_demo_incident(),
+        shelf_image_bytes=shelf_bytes,
+        shelf_image_media_type="image/png",
+        shelf_upload=shelf_artifact,
+    )
+    vision = next(agent for agent in result.agents if agent.agent == SHELF_VISION)
+
+    assert "store-b-cooler-spinach.png" in vision.summary
+    assert "unknown" in vision.summary
+    assert vision.confidence == 0
+    assert vision.reasoning == (
+        "Qwen vision was unavailable; no image match was inferred."
+    )
 
 
 async def test_checkpoints_are_persisted_per_agent() -> None:

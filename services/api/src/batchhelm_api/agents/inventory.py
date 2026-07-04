@@ -103,10 +103,22 @@ class ShelfVisionAgent(Agent):
             if result.recall_match is False
             else "unknown"
         )
+        extracted_label = " ".join(
+            part
+            for part in (
+                result.extracted.product_name,
+                (
+                    f"lot {result.extracted.lot_code}"
+                    if result.extracted.lot_code
+                    else ""
+                ),
+            )
+            if part
+        ) or "no label extracted"
         await ctx.reason(
             self.name,
-            f"Detected {result.extracted.product_name} lot "
-            f"{result.extracted.lot_code} "
+            f"Inspected {upload.original_filename}; detected "
+            f"{extracted_label} "
             f"({result.extracted.confidence}% confidence); "
             f"recall match: {match_label}.",
             source=source,
@@ -115,8 +127,7 @@ class ShelfVisionAgent(Agent):
 
         return AgentOutput(
             summary=(
-                f"Inspected shelf photo: {result.extracted.product_name} "
-                f"lot {result.extracted.lot_code} "
+                f"Inspected {upload.original_filename}: {extracted_label} "
                 f"({match_label})."
             ),
             reasoning=result.evidence_note,
