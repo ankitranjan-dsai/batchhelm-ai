@@ -30,7 +30,7 @@ def test_demo_inspection_endpoint_returns_recall_match(tmp_path: Path) -> None:
     assert payload["used_fallback"] is True
 
 
-def test_shelf_photo_upload_returns_inspection_result(tmp_path: Path) -> None:
+def test_real_shelf_photo_fallback_is_unknown(tmp_path: Path) -> None:
     response = make_client(tmp_path).post(
         "/api/inspections/shelf-photo",
         files={"file": ("shelf.png", b"fake-png", "image/png")},
@@ -40,7 +40,10 @@ def test_shelf_photo_upload_returns_inspection_result(tmp_path: Path) -> None:
     payload = response.json()
     assert payload["upload"]["original_filename"] == "shelf.png"
     assert payload["upload"]["stored_filename"].endswith(".png")
-    assert payload["extracted"]["upc"] == "008500001010"
+    assert payload["extracted"]["product_name"] == ""
+    assert payload["extracted"]["upc"] == ""
+    assert payload["recall_match"] is None
+    assert payload["review_required"] is True
     assert Path(payload["upload"]["path"]).exists()
 
 

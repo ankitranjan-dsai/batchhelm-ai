@@ -80,6 +80,7 @@ class ShelfVisionAgent(Agent):
     depends_on = (DOCUMENT_EXTRACTION,)
 
     async def run(self, ctx: AgentContext) -> AgentOutput:
+        has_real_image = "shelf_image_bytes" in ctx.blackboard
         image_bytes: bytes = ctx.blackboard.get("shelf_image_bytes", b"demo-image")
         media_type: str = ctx.blackboard.get("shelf_image_media_type", "image/png")
         upload = ctx.blackboard.get("shelf_upload") or inspection.demo_upload_metadata()
@@ -90,16 +91,24 @@ class ShelfVisionAgent(Agent):
             image_bytes=image_bytes,
             media_type=media_type,
             incident=ctx.incident,
+            allow_seeded_fallback=not has_real_image,
         )
         ctx.blackboard["inspection"] = result
 
         source = OutputSource.deterministic if result.used_fallback else OutputSource.qwen
+        match_label = (
+            "match"
+            if result.recall_match is True
+            else "no match"
+            if result.recall_match is False
+            else "unknown"
+        )
         await ctx.reason(
             self.name,
             f"Detected {result.extracted.product_name} lot "
             f"{result.extracted.lot_code} "
             f"({result.extracted.confidence}% confidence); "
-            f"recall match: {'yes' if result.recall_match else 'no'}.",
+            f"recall match: {match_label}.",
             source=source,
             data={"review_required": result.review_required},
         )
@@ -108,7 +117,7 @@ class ShelfVisionAgent(Agent):
             summary=(
                 f"Inspected shelf photo: {result.extracted.product_name} "
                 f"lot {result.extracted.lot_code} "
-                f"({'match' if result.recall_match else 'no match'})."
+                f"({match_label})."
             ),
             reasoning=result.evidence_note,
             confidence=result.extracted.confidence,

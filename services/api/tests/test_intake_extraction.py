@@ -8,11 +8,31 @@ import pytest
 from batchhelm_api.intake_extraction import (
     IntakeCompilationError,
     compile_incident_snapshot,
+    extract_notice_draft,
     safe_literal_extraction,
 )
-from batchhelm_api.intake_models import RecallCriteriaDraft, RecallIncidentDraft
+from batchhelm_api.intake_models import (
+    IntakeArtifact,
+    IntakeArtifactRole,
+    RecallCriteriaDraft,
+    RecallIncidentDraft,
+)
 from batchhelm_api.inventory_parser import parse_inventory_csv
-from batchhelm_api.models import IncidentStatus, OutputSource, Severity
+from batchhelm_api.models import (
+    IncidentStatus,
+    ModelImageJSONRequest,
+    ModelJSONRequest,
+    ModelJSONResponse,
+    OutputSource,
+    Severity,
+)
+from batchhelm_api.notice_parser import (
+    NoticeTextPage,
+    ParsedNotice,
+    RenderedNoticePage,
+)
+from batchhelm_api.qwen import QwenGateway
+from tests.conftest import fallback_gateway, make_settings, scripted_gateway
 
 NOTICE = (
     "Spinach 10 oz\n"
@@ -20,6 +40,75 @@ NOTICE = (
     "Affected lots L2418 and L2419\n"
     "UPC 008500001010. Possible contamination risk."
 )
+
+
+class SequenceGateway(QwenGateway):
+    def __init__(self, image_responses: list[dict[str, object]]) -> None:
+        super().__init__(make_settings(api_key="test-key"))
+        self.image_responses = list(image_responses)
+        self.image_calls = 0
+
+    async def complete_json(self, request: ModelJSONRequest) -> ModelJSONResponse:
+        raise AssertionError("Text completion was not expected.")
+
+    async def complete_image_json(
+        self,
+        request: ModelImageJSONRequest,
+    ) -> ModelJSONResponse:
+        response = self.image_responses[self.image_calls]
+        self.image_calls += 1
+        return ModelJSONResponse(
+            provider="qwen",
+            model=self.settings.qwen_vision_model,
+            used_fallback=False,
+            content=response,
+        )
+
+
+def notice_artifact() -> IntakeArtifact:
+    return IntakeArtifact(
+        id="notice-1",
+        intake_id="intake-1",
+        role=IntakeArtifactRole.recall_notice,
+        original_filename="notice.pdf",
+        stored_filename="notice-1.pdf",
+        media_type="application/pdf",
+        size_bytes=100,
+        sha256="a" * 64,
+        relative_path="intakes/intake-1/notice-1.pdf",
+        created_at="2026-07-04T08:00:00+00:00",
+    )
+
+
+def parsed_text_notice(text: str = NOTICE) -> ParsedNotice:
+    return ParsedNotice(
+        normalized_text=text,
+        page_count=1,
+        text_pages=(NoticeTextPage(locator="page 1", text=text),),
+        rendered_pages=(),
+        warnings=(),
+    )
+
+
+def structured_extraction(
+    *,
+    product: str = "Spinach 10 oz",
+    confidence: int = 94,
+) -> dict[str, object]:
+    return {
+        "product_name": {"value": product, "confidence": confidence},
+        "affected_lots": {
+            "value": ["L2418", "L2419"],
+            "confidence": confidence,
+        },
+        "upcs": {"value": ["008500001010"], "confidence": confidence},
+        "risk_level": {"value": "high", "confidence": confidence},
+        "reason": {
+            "value": "Possible contamination",
+            "confidence": confidence,
+        },
+        "source": {"value": "Central Farms", "confidence": confidence},
+    }
 
 
 def valid_draft() -> RecallIncidentDraft:
@@ -43,6 +132,119 @@ def valid_draft() -> RecallIncidentDraft:
         import_summary=inventory.summary,
         review_required=False,
     )
+
+
+@pytest.mark.asyncio
+async def test_qwen_text_extraction_returns_field_evidence() -> None:
+    result = await extract_notice_draft(
+        gateway=scripted_gateway(structured_extraction()),
+        parsed_notice=parsed_text_notice(),
+        notice_artifact=notice_artifact(),
+    )
+
+    assert result.criteria.product_name == "Spinach 10 oz"
+    assert result.criteria.affected_lots == ["L2418", "L2419"]
+    assert result.review_required is False
+    assert all(item.source == OutputSource.qwen for item in result.evidence)
+    assert {item.locator for item in result.evidence} == {"page 1"}
+
+
+@pytest.mark.asyncio
+async def test_unavailable_qwen_returns_literal_review_draft() -> None:
+    result = await extract_notice_draft(
+        gateway=fallback_gateway(),
+        parsed_notice=parsed_text_notice(),
+        notice_artifact=notice_artifact(),
+    )
+
+    assert result.review_required is True
+    assert result.criteria.affected_lots == ["L2418", "L2419"]
+    assert all(
+        item.source == OutputSource.deterministic for item in result.evidence
+    )
+
+
+@pytest.mark.asyncio
+async def test_hallucinated_text_values_are_discarded() -> None:
+    response = structured_extraction(product="Kale")
+    response["affected_lots"] = {
+        "value": ["L2418", "X9999"],
+        "confidence": 99,
+    }
+
+    result = await extract_notice_draft(
+        gateway=scripted_gateway(response),
+        parsed_notice=parsed_text_notice(),
+        notice_artifact=notice_artifact(),
+    )
+
+    assert result.criteria.product_name == "Spinach 10 oz"
+    assert "X9999" not in result.criteria.affected_lots
+    assert "Kale" not in result.criteria.product_name
+    assert result.review_required is True
+
+
+@pytest.mark.asyncio
+async def test_high_confidence_image_extraction_stops_after_first_page() -> None:
+    gateway = SequenceGateway(
+        [structured_extraction(), structured_extraction(product="Kale")]
+    )
+    parsed = ParsedNotice(
+        normalized_text="",
+        page_count=2,
+        text_pages=(),
+        rendered_pages=(
+            RenderedNoticePage(locator="page 1", png_bytes=b"page-one"),
+            RenderedNoticePage(locator="page 2", png_bytes=b"page-two"),
+        ),
+        warnings=(),
+    )
+
+    result = await extract_notice_draft(
+        gateway=gateway,
+        parsed_notice=parsed,
+        notice_artifact=notice_artifact(),
+    )
+
+    assert gateway.image_calls == 1
+    assert result.criteria.product_name == "Spinach 10 oz"
+    assert {item.locator for item in result.evidence} == {"page 1"}
+
+
+@pytest.mark.asyncio
+async def test_conflicting_image_pages_require_review() -> None:
+    gateway = SequenceGateway(
+        [
+            structured_extraction(product="Spinach 10 oz", confidence=70),
+            structured_extraction(product="Kale 10 oz", confidence=70),
+        ]
+    )
+    parsed = ParsedNotice(
+        normalized_text="",
+        page_count=2,
+        text_pages=(),
+        rendered_pages=(
+            RenderedNoticePage(locator="page 1", png_bytes=b"page-one"),
+            RenderedNoticePage(locator="page 2", png_bytes=b"page-two"),
+        ),
+        warnings=(),
+    )
+
+    result = await extract_notice_draft(
+        gateway=gateway,
+        parsed_notice=parsed,
+        notice_artifact=notice_artifact(),
+    )
+
+    product_evidence = [
+        item
+        for item in result.evidence
+        if item.field_path == "criteria.product_name"
+    ]
+    assert gateway.image_calls == 2
+    assert result.review_required is True
+    assert product_evidence
+    assert all(item.requires_review for item in product_evidence)
 
 
 def test_safe_extraction_uses_only_verbatim_notice_values() -> None:

@@ -29,10 +29,37 @@ def inspection_request(
     image_bytes: bytes,
     media_type: str,
     incident: RecallIncidentInput,
+    allow_seeded_fallback: bool,
 ) -> ModelImageJSONRequest:
     criteria = incident.criteria
     lots = ", ".join(criteria.affected_lots)
     upc = criteria.upcs[0] if criteria.upcs else "unknown"
+    seeded_fallback = {
+        "product_name": criteria.product_name,
+        "lot_code": criteria.affected_lots[0] if criteria.affected_lots else "",
+        "upc": upc,
+        "best_by": "2026-07-18",
+        "confidence": 96,
+        "recall_match": True,
+        "recommended_action": (
+            "Quarantine item and attach photo to evidence packet."
+        ),
+        "review_required": False,
+        "evidence_note": "Label fields match the active recall criteria.",
+    }
+    neutral_fallback = {
+        "product_name": "",
+        "lot_code": "",
+        "upc": "",
+        "best_by": None,
+        "confidence": 0,
+        "recall_match": None,
+        "recommended_action": "Review the uploaded shelf image manually.",
+        "review_required": True,
+        "evidence_note": (
+            "Qwen vision was unavailable; no image match was inferred."
+        ),
+    }
     return ModelImageJSONRequest(
         system=(
             "Inspect a shelf or stockroom image for recall evidence. Return only "
@@ -46,17 +73,7 @@ def inspection_request(
         ),
         image_bytes=image_bytes,
         media_type=media_type,
-        fallback={
-            "product_name": criteria.product_name,
-            "lot_code": criteria.affected_lots[0] if criteria.affected_lots else "",
-            "upc": upc,
-            "best_by": "2026-07-18",
-            "confidence": 96,
-            "recall_match": True,
-            "recommended_action": "Quarantine item and attach photo to evidence packet.",
-            "review_required": False,
-            "evidence_note": "Label fields match the active recall criteria.",
-        },
+        fallback=seeded_fallback if allow_seeded_fallback else neutral_fallback,
     )
 
 
@@ -73,10 +90,12 @@ def inspection_from_model_content(
         best_by=content.get("best_by"),
         confidence=_as_int(content.get("confidence", 0)),
     )
+    raw_match = content.get("recall_match")
+    recall_match = raw_match if isinstance(raw_match, bool) else None
     return ShelfInspectionResult(
         upload=upload,
         extracted=extracted,
-        recall_match=bool(content.get("recall_match", False)),
+        recall_match=recall_match,
         recommended_action=str(
             content.get("recommended_action", "Review image manually.")
         ),
@@ -94,10 +113,14 @@ async def inspect_image(
     image_bytes: bytes,
     media_type: str,
     incident: RecallIncidentInput,
+    allow_seeded_fallback: bool,
 ) -> ShelfInspectionResult:
     response = await gateway.complete_image_json(
         inspection_request(
-            image_bytes=image_bytes, media_type=media_type, incident=incident
+            image_bytes=image_bytes,
+            media_type=media_type,
+            incident=incident,
+            allow_seeded_fallback=allow_seeded_fallback,
         )
     )
     return inspection_from_model_content(upload=upload, model_response=response)

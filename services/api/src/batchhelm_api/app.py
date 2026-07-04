@@ -485,6 +485,7 @@ def create_app(
             image_bytes=b"demo-image",
             media_type="image/png",
             incident=build_demo_incident(),
+            allow_seeded_fallback=True,
         )
 
     @app.post("/api/inspections/shelf-photo", response_model=ShelfInspectionResult)
@@ -507,6 +508,7 @@ def create_app(
             image_bytes=content,
             media_type=media_type,
             incident=build_demo_incident(),
+            allow_seeded_fallback=False,
         )
 
     return app
