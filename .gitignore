@@ -19,5 +19,6 @@ __pycache__/
 venv/
 .idea/
 .vscode/
+.superpowers/
 apps/web/vite.config.d.ts
 apps/web/vite.config.js
