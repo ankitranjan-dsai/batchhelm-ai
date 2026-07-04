@@ -748,7 +748,7 @@ mkdir -p "$TMP/checkpoint-3"
 
 Expected: chart numbers match the source, synthetic delay is clearly disclosed, the sample incident is not framed as a customer, and the close contains no unsupported badge.
 
-- [ ] **Step 5: Commit and push the complete narrative**
+- [x] **Step 5: Commit and push the complete narrative**
 
 Run:
 
@@ -839,7 +839,7 @@ cd "$REPO"
 
 Expected: only Ankit Ranjan is named as an individual author, and attribution checks pass.
 
-- [ ] **Step 4: Commit and push metadata cleanup when the PPTX changed**
+- [x] **Step 4: Commit and push metadata cleanup when the PPTX changed**
 
 Run:
 
@@ -854,6 +854,9 @@ fi
 ```
 
 Expected: no metadata-only change is left uncommitted.
+
+Execution note: the cleaned metadata shipped with the complete narrative in
+commit `6427bbf`.
 
 ## Task 9: Run Full Visual And Structural Release Gates
 
@@ -939,11 +942,11 @@ Expected: the package contains exactly ten slide XML files and reports ten slide
 - Modify: `docs/superpowers/plans/2026-07-04-batchhelm-final-hackathon-deck.md`
 - Modify only if needed: `docs/presentation/batchhelm-ai-hackathon-deck.pptx`
 
-- [ ] **Step 1: Mark each completed plan checkbox**
+- [x] **Step 1: Mark each completed plan checkbox**
 
 Update this file incrementally during execution. At release, every applicable checkbox must be checked and every conditional path must state whether it ran.
 
-- [ ] **Step 2: Run repository gates**
+- [x] **Step 2: Run repository gates**
 
 Run:
 
@@ -956,7 +959,7 @@ git status --short
 
 Expected: no accidental scratch/render files are tracked and only the plan completion update, if any, remains.
 
-- [ ] **Step 3: Commit and push the verified milestone**
+- [x] **Step 3: Commit and push the verified milestone**
 
 Run:
 
@@ -971,7 +974,7 @@ git push origin main
 
 If the deck is unchanged at this step, stage and commit only the completed plan.
 
-- [ ] **Step 4: Verify the remote revision**
+- [x] **Step 4: Verify the remote revision**
 
 Run:
 
