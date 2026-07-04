@@ -20,6 +20,7 @@ CSV = (
     b"Store A,SPN10Z,Spinach 10 oz,L2418,008500001010,6,"
     b"Cooler,Central Farms\n"
 )
+SAMPLE_DATA = Path(__file__).resolve().parents[3] / "sample-data"
 
 
 class FailingIntakeRepository:
@@ -56,6 +57,35 @@ def create_intake(
         files={
             "notice": ("notice.txt", NOTICE, "text/plain"),
             "inventory": ("inventory.csv", CSV, "text/csv"),
+        },
+    )
+
+
+def upload_sample_packet(
+    client: TestClient,
+    *,
+    inventory_name: str = "inventory-spinach.csv",
+    request_id: str = "9d05fc09-d47c-43aa-9f01-b021b26f0ac8",
+):
+    return client.post(
+        "/api/intakes",
+        data={"request_id": request_id},
+        files={
+            "notice": (
+                "recall-notice-spinach.pdf",
+                (SAMPLE_DATA / "recall-notice-spinach.pdf").read_bytes(),
+                "application/pdf",
+            ),
+            "inventory": (
+                inventory_name,
+                (SAMPLE_DATA / inventory_name).read_bytes(),
+                "text/csv",
+            ),
+            "shelf_evidence": (
+                "store-b-cooler-spinach.png",
+                (SAMPLE_DATA / "store-b-cooler-spinach.png").read_bytes(),
+                "image/png",
+            ),
         },
     )
 
@@ -254,3 +284,45 @@ def test_unconfirmed_intake_cannot_launch(tmp_path: Path) -> None:
 
     assert response.status_code == 409
     assert response.json()["code"] == "intake_state_conflict"
+
+
+def test_sample_packet_reaches_review_and_matches_demo_totals(
+    tmp_path: Path,
+) -> None:
+    with make_client(tmp_path) as client:
+        response = upload_sample_packet(client)
+        assert response.status_code == 202
+        view = wait_for_intake(client, response.json()["status_url"])
+
+    assert view["status"] == "review_required"
+    assert view["draft"]["import_summary"]["accepted_rows"] == 6
+    assert sum(
+        row["on_hand"] for row in view["draft"]["inventory"]
+    ) == 23
+    assert view["draft"]["criteria"]["affected_lots"] == [
+        "L2418",
+        "L2419",
+        "L2420",
+        "L2421",
+        "L2422",
+    ]
+
+
+def test_sample_invalid_inventory_surfaces_two_review_warnings(
+    tmp_path: Path,
+) -> None:
+    with make_client(tmp_path) as client:
+        response = upload_sample_packet(
+            client,
+            inventory_name="inventory-spinach-invalid.csv",
+            request_id="ad05fc09-d47c-43aa-9f01-b021b26f0ac8",
+        )
+        assert response.status_code == 202
+        view = wait_for_intake(client, response.json()["status_url"])
+
+    summary = view["draft"]["import_summary"]
+    assert summary["accepted_rows"] == 6
+    assert summary["rejected_rows"] == 2
+    assert len(summary["warnings"]) == 2
+    assert "non-negative integer" in summary["warnings"][0]
+    assert "duplicate inventory record" in summary["warnings"][1]

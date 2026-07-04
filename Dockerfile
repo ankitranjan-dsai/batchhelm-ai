@@ -11,6 +11,7 @@ ENV PYTHONUNBUFFERED=1 \
     DATABASE_PATH=/data/batchhelm.db \
     MEMORY_PATH=/data/batchhelm-memory.db \
     ORCHESTRATION_DATABASE_PATH=/data/orchestration.db \
+    INTAKE_DATABASE_PATH=/data/intake.db \
     UPLOAD_DIR=/data/uploads
 
 WORKDIR /app
