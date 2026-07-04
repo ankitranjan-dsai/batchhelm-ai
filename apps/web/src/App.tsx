@@ -13,6 +13,7 @@ import {
   ClipboardList,
   Download,
   FileCheck2,
+  FilePlus2,
   FileText,
   Filter,
   HelpCircle,
@@ -41,7 +42,9 @@ import {
 } from "./api";
 import { demoIncident } from "./data/demoIncident";
 import { EvidenceReviewGate } from "./EvidenceReviewGate";
+import { IntakeWorkspace } from "./IntakeWorkspace";
 import { MissionControl } from "./MissionControl";
+import { useIntakeWorkspace } from "./useIntakeWorkspace";
 import { useOrchestrationRun } from "./useOrchestrationRun";
 import type {
   AgentActivity,
@@ -76,8 +79,12 @@ type InspectionState = "idle" | "loading" | "ready" | "error";
 type PacketState = "idle" | "loading" | "ready" | "error";
 
 export function App() {
+  const orchestrationController = useOrchestrationRun();
   const { session: orchestration, rerun: rerunOrchestration } =
-    useOrchestrationRun();
+    orchestrationController;
+  const intakeController = useIntakeWorkspace({
+    onRunAccepted: orchestrationController.adoptRun,
+  });
   const [activeNav, setActiveNav] = useState("Recalls");
   const [storeFilter, setStoreFilter] = useState<StoreFilter>("all");
   const [incident, setIncident] = useState<RecallIncident>(demoIncident);
@@ -237,7 +244,10 @@ export function App() {
         <TopBar incident={incident} provider={provider} syncState={syncState} />
         <main className="dashboard" aria-label="Recall command center">
           <section className="dashboard-grid">
-            <IncidentSummary incident={incident} />
+            <IncidentSummary
+              incident={incident}
+              onNewRecall={intakeController.open}
+            />
             <aside className="right-rail" aria-label="Live intelligence panels">
               <AgentPanel agents={incident.agents} />
               <MemoryPanel insights={incident.insights} />
@@ -282,6 +292,7 @@ export function App() {
           <MobileInspection incident={incident} />
         </main>
       </div>
+      <IntakeWorkspace controller={intakeController} />
     </div>
   );
 }
@@ -476,7 +487,13 @@ function TopBar({
   );
 }
 
-function IncidentSummary({ incident }: { incident: RecallIncident }) {
+function IncidentSummary({
+  incident,
+  onNewRecall,
+}: {
+  incident: RecallIncident;
+  onNewRecall: () => void;
+}) {
   return (
     <section className="incident-card" aria-labelledby="incident-title">
       <div className="incident-alert">
@@ -518,6 +535,14 @@ function IncidentSummary({ incident }: { incident: RecallIncident }) {
           <FileCheck2 size={18} />
           <span>Compliance Packet</span>
           <em>In Progress</em>
+        </button>
+        <button
+          type="button"
+          className="action-button new-recall-button"
+          onClick={onNewRecall}
+        >
+          <FilePlus2 size={18} />
+          <span>New recall</span>
         </button>
         <button type="button" className="square-button" aria-label="More actions">
           <MoreHorizontal size={18} />

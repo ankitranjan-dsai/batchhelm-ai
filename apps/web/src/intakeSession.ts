@@ -63,6 +63,7 @@ export type IntakeSessionAction =
     }
   | { type: "operation"; operation: IntakeOperation }
   | { type: "show-launch" }
+  | { type: "show-review" }
   | { type: "failed"; message: string }
   | { type: "reset" };
 
@@ -141,6 +142,9 @@ export function intakeSessionReducer(
   }
   if (action.type === "show-launch") {
     return { ...state, stage: "launch", error: "" };
+  }
+  if (action.type === "show-review") {
+    return { ...state, stage: "review", error: "" };
   }
   return { ...state, operation: "idle", error: action.message };
 }

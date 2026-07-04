@@ -16,6 +16,8 @@ export interface UseIntakeWorkspaceOptions {
   onRunAccepted?: (accepted: api.OrchestrationRunAccepted) => void;
 }
 
+export const INTAKE_SESSION_KEY = "batchhelm.intake.accepted";
+
 type CommandName = "create" | "save" | "confirm" | "launch";
 
 export function useIntakeWorkspace(
@@ -32,6 +34,13 @@ export function useIntakeWorkspace(
   const commandIds = useRef<Partial<Record<CommandName, string>>>({});
   const onRunAccepted = useRef(options.onRunAccepted);
   onRunAccepted.current = options.onRunAccepted;
+
+  useEffect(() => {
+    const accepted = restoreAcceptedIntake();
+    if (accepted !== null) {
+      dispatch({ type: "accepted", accepted });
+    }
+  }, []);
 
   useEffect(() => {
     const statusUrl = session.accepted?.status_url;
@@ -111,6 +120,10 @@ export function useIntakeWorkspace(
           notice,
           inventory,
           shelfPhoto ?? undefined,
+        );
+        sessionStorage.setItem(
+          INTAKE_SESSION_KEY,
+          JSON.stringify(accepted),
         );
         commandIds.current.create = undefined;
         dispatch({ type: "accepted", accepted });
@@ -212,6 +225,10 @@ export function useIntakeWorkspace(
     dispatch({ type: "show-launch" });
   }, []);
 
+  const backToReview = useCallback(() => {
+    dispatch({ type: "show-review" });
+  }, []);
+
   const launch = useCallback(async (): Promise<void> => {
     const existing = inFlight.current.launch as Promise<void> | undefined;
     if (existing !== undefined) {
@@ -244,6 +261,7 @@ export function useIntakeWorkspace(
         commandIds.current.launch = undefined;
         dispatch({ type: "received", intake: accepted.intake });
         onRunAccepted.current?.(accepted.run);
+        sessionStorage.removeItem(INTAKE_SESSION_KEY);
         setIsOpen(false);
       } catch (error) {
         dispatch({ type: "failed", message: errorMessage(error) });
@@ -258,6 +276,7 @@ export function useIntakeWorkspace(
   const reset = useCallback(() => {
     inFlight.current = {};
     commandIds.current = {};
+    sessionStorage.removeItem(INTAKE_SESSION_KEY);
     dispatch({ type: "reset" });
   }, []);
 
@@ -276,6 +295,7 @@ export function useIntakeWorkspace(
     saveDraft,
     confirm,
     continueToLaunch,
+    backToReview,
     launch,
     reset,
     receive,
@@ -299,4 +319,34 @@ function errorMessage(error: unknown): string {
   return error instanceof Error
     ? error.message
     : "Incident intake is unavailable.";
+}
+
+function restoreAcceptedIntake(): api.IntakeAccepted | null {
+  const raw = sessionStorage.getItem(INTAKE_SESSION_KEY);
+  if (raw === null) {
+    return null;
+  }
+  try {
+    const value = JSON.parse(raw) as Partial<api.IntakeAccepted>;
+    if (
+      typeof value.intake_id !== "string" ||
+      typeof value.status_url !== "string" ||
+      typeof value.created_at !== "string" ||
+      ![
+        "uploaded",
+        "extracting",
+        "review_required",
+        "ready",
+        "run_started",
+        "failed",
+      ].includes(value.status ?? "")
+    ) {
+      sessionStorage.removeItem(INTAKE_SESSION_KEY);
+      return null;
+    }
+    return value as api.IntakeAccepted;
+  } catch {
+    sessionStorage.removeItem(INTAKE_SESSION_KEY);
+    return null;
+  }
 }

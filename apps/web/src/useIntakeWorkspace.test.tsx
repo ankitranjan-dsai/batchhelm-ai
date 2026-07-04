@@ -3,7 +3,10 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "./api";
-import { useIntakeWorkspace } from "./useIntakeWorkspace";
+import {
+  INTAKE_SESSION_KEY,
+  useIntakeWorkspace,
+} from "./useIntakeWorkspace";
 
 const accepted: api.IntakeAccepted = {
   intake_id: "intake-1",
@@ -74,6 +77,7 @@ describe("useIntakeWorkspace", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.restoreAllMocks();
+    sessionStorage.clear();
     vi.stubGlobal("crypto", {
       randomUUID: vi.fn().mockReturnValue("request-1"),
     });
@@ -178,5 +182,25 @@ describe("useIntakeWorkspace", () => {
     expect(api.startIntakeRun).toHaveBeenCalledTimes(1);
     expect(onRunAccepted).toHaveBeenCalledWith(runAccepted);
     expect(result.current.isOpen).toBe(false);
+  });
+
+  it("restores a durable intake after refresh", async () => {
+    sessionStorage.setItem(INTAKE_SESSION_KEY, JSON.stringify(accepted));
+    const fetch = vi
+      .spyOn(api, "fetchIntake")
+      .mockResolvedValue(intakeView());
+    const { result } = renderHook(() => useIntakeWorkspace());
+
+    act(() => result.current.open());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result.current.session.stage).toBe("review");
+    expect(result.current.session.view?.intake_id).toBe("intake-1");
   });
 });
