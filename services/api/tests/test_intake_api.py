@@ -74,6 +74,20 @@ def wait_for_intake(
     raise AssertionError("Intake did not finish processing.")
 
 
+def wait_for_run(
+    client: TestClient,
+    result_url: str,
+) -> dict[str, object]:
+    for _attempt in range(100):
+        response = client.get(result_url)
+        assert response.status_code == 200
+        payload = response.json()
+        if payload["status"] in {"completed", "failed"}:
+            return payload
+        time.sleep(0.01)
+    raise AssertionError("Orchestration run did not finish.")
+
+
 def test_create_intake_returns_202_and_reviewable_status(
     tmp_path: Path,
 ) -> None:
@@ -192,3 +206,51 @@ def test_intake_store_failure_does_not_break_health(tmp_path: Path) -> None:
         "details": None,
     }
     assert "/private/secret" not in response.text
+
+
+def test_confirmed_intake_launches_one_durable_run(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client:
+        accepted = create_intake(client).json()
+        review = wait_for_intake(client, accepted["status_url"])
+        confirmed = client.post(
+            f"/api/intakes/{accepted['intake_id']}/confirm",
+            json={
+                "request_id": "6d05fc09-d47c-43aa-9f01-b021b26f0ac8",
+                "expected_version": review["version"],
+            },
+        ).json()
+        launch_payload = {
+            "request_id": "7d05fc09-d47c-43aa-9f01-b021b26f0ac8"
+        }
+        first = client.post(
+            f"/api/intakes/{accepted['intake_id']}/runs",
+            json=launch_payload,
+        )
+        replay = client.post(
+            f"/api/intakes/{accepted['intake_id']}/runs",
+            json=launch_payload,
+        )
+        run_view = wait_for_run(client, first.json()["run"]["result_url"])
+
+    assert confirmed["status"] == "ready"
+    assert first.status_code == 202
+    assert replay.status_code == 202
+    assert replay.json()["run"]["run_id"] == first.json()["run"]["run_id"]
+    assert first.json()["intake"]["status"] == "run_started"
+    assert run_view["incident_id"] == confirmed["incident_id"]
+    assert run_view["result"]["analysis"]["product"] == "Spinach 10 oz"
+
+
+def test_unconfirmed_intake_cannot_launch(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client:
+        accepted = create_intake(client).json()
+        wait_for_intake(client, accepted["status_url"])
+        response = client.post(
+            f"/api/intakes/{accepted['intake_id']}/runs",
+            json={
+                "request_id": "8d05fc09-d47c-43aa-9f01-b021b26f0ac8"
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "intake_state_conflict"

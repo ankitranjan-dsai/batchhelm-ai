@@ -34,6 +34,7 @@ from batchhelm_api.agents.operations import (
 )
 from batchhelm_api.config import Settings
 from batchhelm_api.event_stream import RunEventChannel
+from batchhelm_api.intake_models import IntakeArtifact
 from batchhelm_api.memory_repository import AgentCheckpoint, MemoryRepository
 from batchhelm_api.models import (
     AgentActivity,
@@ -49,6 +50,7 @@ from batchhelm_api.models import (
     RecallAnalysis,
     RecallIncidentInput,
     TaskStatus,
+    UploadMetadata,
     WorkflowEvent,
     WorkflowStatus,
 )
@@ -129,6 +131,7 @@ class Orchestrator:
         recovery: OrchestrationCheckpoint | None = None,
         shelf_image_bytes: bytes | None = None,
         shelf_image_media_type: str | None = None,
+        shelf_upload: IntakeArtifact | None = None,
     ) -> OrchestrationResult:
         resolved_run_id = run_id or uuid4().hex
         recorder = EventRecorder(
@@ -152,6 +155,15 @@ class Orchestrator:
             ctx.blackboard["shelf_image_media_type"] = (
                 shelf_image_media_type or "image/png"
             )
+            if shelf_upload is not None:
+                ctx.blackboard["shelf_upload"] = UploadMetadata(
+                    id=shelf_upload.id,
+                    original_filename=shelf_upload.original_filename,
+                    stored_filename=shelf_upload.stored_filename,
+                    media_type=shelf_upload.media_type,
+                    size_bytes=shelf_upload.size_bytes,
+                    path=shelf_upload.relative_path,
+                )
 
         started_at = recovery.started_at if recovery else utcnow()
         start_perf = time.perf_counter()

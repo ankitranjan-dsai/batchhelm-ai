@@ -256,6 +256,19 @@ class IntakeService:
             snapshot=snapshot,
         ).to_view()
 
+    def link_run(
+        self,
+        intake_id: str,
+        *,
+        request_id: str,
+        run_id: str,
+    ) -> IntakeView:
+        return self.repository.link_run(
+            intake_id,
+            request_id=request_id,
+            run_id=run_id,
+        ).to_view()
+
     def resolve_run_input(self, incident_id: str) -> ResolvedRunInput | None:
         record = self.repository.get_by_incident(incident_id)
         if record is None or record.snapshot is None:

@@ -19,7 +19,11 @@ from batchhelm_api.intake_models import (
     IntakeConfirmRequest,
     IntakeCreateRequest,
     IntakeDraftUpdate,
+    IntakeRunAccepted,
+    IntakeRunRequest,
+    IntakeStatus,
     IntakeView,
+    ResolvedRunInput,
 )
 from batchhelm_api.intake_repository import (
     IntakeIdempotencyConflict,
@@ -174,11 +178,20 @@ def create_app(
         orchestrator_factory=build_orchestrator,
     )
 
+    def resolve_run_input(incident_id: str) -> ResolvedRunInput | None:
+        demo_incident = build_demo_incident()
+        if incident_id == demo_incident.id:
+            return ResolvedRunInput(incident=demo_incident)
+        try:
+            return intake_service.resolve_run_input(incident_id)
+        except (IntakeStoreUnavailable, IntakeProcessingFailed):
+            return None
+
     @asynccontextmanager
     async def app_lifespan(_app: FastAPI) -> AsyncIterator[None]:
         with suppress(IntakeStoreUnavailable):
             await intake_service.recover()
-        await orchestration_service.recover(build_demo_incident)
+        await orchestration_service.recover(resolve_run_input)
         yield
 
     telemetry = Telemetry()
@@ -520,6 +533,53 @@ def create_app(
     ) -> IntakeView:
         return service.confirm(intake_id, request)
 
+    @app.post(
+        "/api/intakes/{intake_id}/runs",
+        response_model=IntakeRunAccepted,
+        status_code=202,
+    )
+    async def start_intake_run(
+        intake_id: str,
+        request: IntakeRunRequest,
+        intake_service: IntakeService = Depends(get_intake_service),
+        orchestration_service: OrchestrationService = Depends(
+            get_orchestration_service
+        ),
+    ) -> IntakeRunAccepted:
+        view = intake_service.get(intake_id)
+        if view.status == IntakeStatus.run_started and view.run_id is not None:
+            run_view = orchestration_service.get(view.run_id)
+            accepted = OrchestrationRunAccepted(
+                run_id=run_view.run_id,
+                incident_id=run_view.incident_id,
+                status=run_view.status,
+                events_url=(
+                    f"/api/orchestration/runs/{run_view.run_id}/events"
+                ),
+                result_url=f"/api/orchestration/runs/{run_view.run_id}",
+            )
+            return IntakeRunAccepted(intake=view, run=accepted)
+        if view.status != IntakeStatus.ready or view.incident_id is None:
+            raise IntakeStateConflict(
+                "Intake must be confirmed before a run can start."
+            )
+        run_input = intake_service.resolve_run_input(view.incident_id)
+        if run_input is None:
+            raise IntakeStateConflict(
+                "Confirmed incident input is unavailable."
+            )
+        telemetry.increment("orchestration_runs")
+        accepted = await orchestration_service.start(
+            run_input,
+            request_id=str(request.request_id),
+        )
+        linked = intake_service.link_run(
+            intake_id,
+            request_id=str(request.request_id),
+            run_id=accepted.run_id,
+        )
+        return IntakeRunAccepted(intake=linked, run=accepted)
+
     @app.get("/api/incidents/demo", response_model=RecallIncidentInput)
     async def get_demo_incident() -> RecallIncidentInput:
         return build_demo_incident()
@@ -545,7 +605,7 @@ def create_app(
     ) -> OrchestrationRunAccepted:
         telemetry.increment("orchestration_runs")
         return await service.start(
-            build_demo_incident(),
+            ResolvedRunInput(incident=build_demo_incident()),
             request_id=str(request.request_id),
         )
 
@@ -588,7 +648,7 @@ def create_app(
     ) -> OrchestrationResult:
         telemetry.increment("orchestration_runs")
         accepted = await service.start(
-            build_demo_incident(),
+            ResolvedRunInput(incident=build_demo_incident()),
             request_id=uuid4().hex,
         )
         return await service.wait_for_result(accepted.run_id)
@@ -599,7 +659,7 @@ def create_app(
     ) -> StreamingResponse:
         telemetry.increment("orchestration_streams")
         accepted = await service.start(
-            build_demo_incident(),
+            ResolvedRunInput(incident=build_demo_incident()),
             request_id=uuid4().hex,
         )
         return StreamingResponse(

@@ -13,18 +13,18 @@ from batchhelm_api.event_stream import (
     sse_pack,
     sse_result,
 )
+from batchhelm_api.intake_models import ResolvedRunInput
 from batchhelm_api.models import (
     AgentRunEvent,
     AgentRunStatus,
     OrchestrationResult,
     OrchestrationRunAccepted,
     OrchestrationRunView,
-    RecallIncidentInput,
 )
 from batchhelm_api.orchestration_repository import OrchestrationRepository
 
 OrchestratorFactory = Callable[[], Orchestrator]
-IncidentFactory = Callable[[], RecallIncidentInput]
+RunInputResolver = Callable[[str], ResolvedRunInput | None]
 
 
 class OrchestrationExecutionFailed(RuntimeError):
@@ -47,18 +47,18 @@ class OrchestrationService:
 
     async def start(
         self,
-        incident: RecallIncidentInput,
+        run_input: ResolvedRunInput,
         *,
         request_id: str,
     ) -> OrchestrationRunAccepted:
         orchestrator = self._orchestrator_factory()
         run = self.repository.create_run(
             run_id=uuid4().hex,
-            incident_id=incident.id,
+            incident_id=run_input.incident.id,
             idempotency_key=request_id,
             provider_mode=orchestrator.gateway.status().mode,
         )
-        await self._ensure_worker(run.id, incident)
+        await self._ensure_worker(run.id, run_input)
         return OrchestrationRunAccepted(
             run_id=run.id,
             incident_id=run.incident_id,
@@ -131,10 +131,10 @@ class OrchestrationService:
             if send_heartbeat:
                 yield sse_heartbeat()
 
-    async def recover(self, incident_factory: IncidentFactory) -> None:
-        incident = incident_factory()
+    async def recover(self, resolver: RunInputResolver) -> None:
         for run in self.repository.list_recoverable():
-            if run.incident_id != incident.id:
+            run_input = resolver(run.incident_id)
+            if run_input is None:
                 self.repository.fail_run(
                     run.id,
                     code="incident_unavailable",
@@ -142,12 +142,12 @@ class OrchestrationService:
                 )
                 await self._notify(run.id)
                 continue
-            await self._ensure_worker(run.id, incident)
+            await self._ensure_worker(run.id, run_input)
 
     async def _ensure_worker(
         self,
         run_id: str,
-        incident: RecallIncidentInput,
+        run_input: ResolvedRunInput,
     ) -> None:
         async with self._lock:
             run = self.repository.get_run(run_id)
@@ -156,7 +156,7 @@ class OrchestrationService:
             existing = self._tasks.get(run_id)
             if existing is not None and not existing.done():
                 return
-            task = asyncio.create_task(self._execute(run_id, incident))
+            task = asyncio.create_task(self._execute(run_id, run_input))
             self._tasks[run_id] = task
             self._worker_starts[run_id] = self._worker_starts.get(run_id, 0) + 1
             task.add_done_callback(
@@ -166,7 +166,7 @@ class OrchestrationService:
     async def _execute(
         self,
         run_id: str,
-        incident: RecallIncidentInput,
+        run_input: ResolvedRunInput,
     ) -> None:
         try:
             orchestrator = self._orchestrator_factory()
@@ -177,7 +177,7 @@ class OrchestrationService:
                 return
             initial_sequence = self.repository.latest_sequence(run_id)
             result = await orchestrator.run(
-                incident,
+                run_input.incident,
                 run_id=run_id,
                 persist_event=self._persist_event,
                 initial_sequence=initial_sequence,
@@ -185,6 +185,9 @@ class OrchestrationService:
                     run_id, value
                 ),
                 recovery=checkpoint,
+                shelf_image_bytes=run_input.shelf_image_bytes,
+                shelf_image_media_type=run_input.shelf_image_media_type,
+                shelf_upload=run_input.shelf_artifact,
             )
             complete_history = self.repository.list_events_after(run_id, 0)
             result = result.model_copy(update={"events": complete_history})
