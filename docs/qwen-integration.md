@@ -16,6 +16,8 @@ QWEN_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
 QWEN_TEXT_MODEL=qwen-plus
 QWEN_VISION_MODEL=qwen-vl-plus
 ORCHESTRATION_DATABASE_PATH=./data/orchestration.db
+INTAKE_DATABASE_PATH=./data/intake.db
+UPLOAD_DIR=./data/uploads
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
@@ -46,14 +48,31 @@ deterministic fallback on any failure:
 | Management briefing | `generate_briefing` | `ManagementBriefing` |
 | Shelf-photo interpretation | `inspection.inspect_image` | `ShelfInspectionResult` |
 
+For real intake notices, the service first extracts bounded text from text
+files and text PDFs. Scanned PDFs and image notices are rendered and sent to
+the vision model. Each extracted field is paired with an artifact ID, source
+locator, confidence, and provider source before it reaches review.
+
 Validation rule: if Qwen is unconfigured, errors, or returns JSON that fails
 schema validation, the task returns the deterministic fallback and marks the
 output `source = deterministic`. Valid live output is marked `source = qwen`.
 This is surfaced everywhere — API fields, agent events, and the dashboard badges.
 
+The fallback policy distinguishes bundled demo data from arbitrary uploads.
+Literal text parsing may recover values that are actually present in a real
+notice, but it never copies seeded demo criteria into an uploaded incident.
+Likewise, failure while inspecting a real shelf image returns `recall_match =
+null`, zero confidence, and `review_required = true`; it cannot fabricate a
+positive match.
+
 ## Provider Surface (API)
 
 - `GET /api/qwen/status` — provider mode + configured models
+- `POST /api/intakes` — stores a real packet and starts typed extraction
+- `GET /api/intakes/{intake_id}` — returns extraction status and provenance
+- `PATCH /api/intakes/{intake_id}/draft` — saves reviewer evidence
+- `POST /api/intakes/{intake_id}/confirm` — freezes the incident snapshot
+- `POST /api/intakes/{intake_id}/runs` — starts the snapshot's durable run
 - `POST /api/incidents/demo/runs` — idempotently starts one durable Qwen-driven run
 - `GET /api/orchestration/runs/{run_id}` — persisted run status and result
 - `GET /api/orchestration/runs/{run_id}/events` — ordered replay plus live SSE
@@ -81,11 +100,16 @@ BatchHelm routes shelf and stockroom images to the configured vision model throu
 4. Workflow engine compares extracted values against recall criteria.
 5. Low-confidence matches are routed to human review.
 
+For intake-backed orchestration, the Shelf Vision Agent resolves the exact
+artifact stored with the confirmed incident. The bundled demo image is only
+eligible for the explicit demo route.
+
 Current upload policy:
 
 - accepted media types: JPEG, PNG, WebP
 - maximum file size: 8 MB
 - generated server filenames only
+- SHA-256 metadata attached to the intake record
 - raw image contents are not written to logs
 
 ## Local Verification

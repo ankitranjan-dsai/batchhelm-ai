@@ -42,14 +42,24 @@ Supporting capabilities (honest scope):
 
 ## How It Works
 
-`POST /api/incidents/demo/runs` creates one idempotent orchestration run and
-returns its run ID plus status and event URLs. The dashboard subscribes to
+**Files.** An operator uploads a recall notice, inventory CSV, and optional
+shelf photo. BatchHelm stores the artifacts immutably, parses the packet, and
+uses Qwen text or vision extraction when configured.
+
+**Review.** The workspace presents recall criteria, inventory totals, rejected
+rows, confidence, and source locators. Reviewer corrections are versioned with
+optimistic concurrency and recorded as `reviewer` evidence.
+
+**Launch.** Confirmation compiles an immutable incident snapshot. A separate
+request UUID starts exactly one orchestration run for that snapshot, and the
+dashboard adopts its run ID, status URL, and replayable event stream.
+
+The dashboard subscribes to
 `GET /api/orchestration/runs/{run_id}/events`, which replays persisted events
 before following live Server-Sent Events. Refreshing or reconnecting resumes
-the same run rather than launching another. The run status endpoint returns the
-durable status and terminal result. Every output is tagged with its source —
-`qwen`, `deterministic`, `memory`, or `reviewer` — so model output is
-distinguishable from fallback.
+the same intake and run rather than launching another. Every output is tagged
+with its source - `qwen`, `deterministic`, `memory`, or `reviewer` - so model
+output is distinguishable from fallback.
 
 Qwen drives extraction, inventory-match reasoning, risk classification, the
 customer notice, shelf-photo interpretation, and the briefing. Each call is
@@ -59,19 +69,36 @@ failure, so the workflow never breaks. See
 [docs/architecture.md](docs/architecture.md), and
 [docs/sample-incident-walkthrough.md](docs/sample-incident-walkthrough.md).
 
-## Initial Product Surface
+## Real Incident Intake
 
-The first release will be a premium operations dashboard with these core screens:
+The intake API accepts:
 
-- Recall inbox and incident details
+- recall notices: text, PDF, JPEG, PNG, or WebP, up to 12 MB;
+- inventory: UTF-8 CSV, up to 4 MB and 5,000 data rows;
+- optional shelf evidence: JPEG, PNG, or WebP, up to 8 MB;
+- complete multipart packet: up to 24 MB.
+
+Text PDFs are extracted directly. Scanned PDFs and image notices are rendered
+through the vision path. Inventory headers are normalized from supported
+aliases, invalid rows are isolated as review warnings, and duplicate inventory
+identities are rejected without discarding valid rows.
+
+Try the committed packet in [`sample-data`](sample-data/README.md). It contains
+a supplier PDF, a six-row inventory export totaling 23 units, an intentionally
+invalid export, and a readable cooler image.
+
+## Product Surface
+
+The current product includes:
+
+- Files -> Review -> Launch incident-intake workspace
+- Recall dashboard and incident details
 - Affected inventory map
-- Agent workflow timeline
-- Shelf-photo inspection queue
-- Staff task board
-- Customer notice composer
-- Evidence packet preview
-- Evidence reviewer approval gate and audit trail
-- Memory and alias manager
+- Agent Mission Control with replayable event timeline
+- Shelf-photo evidence inspection
+- Staff task board and customer notice draft
+- Evidence packet preview and durable reviewer approval gate
+- Management briefing, memory, and supplier-alias insights
 
 ## Technology Direction
 
@@ -79,7 +106,7 @@ The first release will be a premium operations dashboard with these core screens
 - Backend: FastAPI, Python, Pydantic
 - Model integration: Qwen Cloud via configurable provider interface
 - Storage: SQLite for local demo, Postgres-ready repository layer
-- Documents: generated Markdown/PDF evidence packet
+- Documents: text/PDF/image notice intake and generated Markdown evidence packet
 - Deployment target: Alibaba Cloud Container Service or Elastic Compute Service with Docker
 
 ## Run The Frontend
@@ -108,6 +135,7 @@ The current dashboard implementation is visually tracked against:
 - `docs/design-assets/screenshots/dashboard-mobile.png`
 - `docs/design-assets/screenshots/mission-control-desktop.png`
 - `docs/design-assets/screenshots/mission-control-mobile.png`
+- `docs/design-assets/screenshots/intake-files-desktop.png`
 
 ## Run The Backend
 
@@ -131,6 +159,11 @@ Important endpoints:
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/health` | Service health check |
+| `POST` | `/api/intakes` | Idempotently stores a multipart packet and starts extraction |
+| `GET` | `/api/intakes/{intake_id}` | Returns durable extraction, evidence, draft, and status |
+| `PATCH` | `/api/intakes/{intake_id}/draft` | Saves a version-checked reviewer correction |
+| `POST` | `/api/intakes/{intake_id}/confirm` | Compiles an immutable confirmed incident snapshot |
+| `POST` | `/api/intakes/{intake_id}/runs` | Idempotently launches the confirmed incident |
 | `GET` | `/api/incidents/demo` | Returns the demo recall input |
 | `POST` | `/api/incidents/demo/analyze` | Deterministic baseline analysis |
 | `POST` | `/api/incidents/demo/runs` | Idempotently starts one durable orchestration run |
@@ -168,6 +201,20 @@ interface is ready for a future Postgres adapter.
 
 Shelf-photo inspection accepts JPEG, PNG, and WebP files up to 8 MB.
 
+### Durable Intake Storage
+
+Intake lifecycle state, versions, artifact metadata, extraction evidence, and
+confirmed incident snapshots are stored in a dedicated SQLite WAL database at
+`INTAKE_DATABASE_PATH` (default `./data/intake.db`). Accepted files are written
+under `UPLOAD_DIR/intakes/{intake_id}` with generated names and SHA-256
+digests; staging directories are never treated as accepted artifacts.
+
+The create endpoint is idempotent by request UUID and packet fingerprint.
+Extraction resumes after API startup if a durable intake remains in
+`uploaded` or `extracting`. Reviewer updates require the current version, so a
+stale browser cannot overwrite a newer correction. Confirmation freezes the
+validated criteria and inventory into the incident used by orchestration.
+
 ### Durable Orchestration Storage
 
 Runs, typed wave checkpoints, ordered events, terminal results, and sanitized
@@ -177,9 +224,10 @@ persisted before publication. SSE clients can replay from `Last-Event-ID` or
 the `after` query parameter, and API startup resumes non-terminal runs from the
 last completed wave.
 
-Worker ownership is currently single-process. Run state survives an API
-restart, but a horizontally scaled deployment requires shared storage and
-distributed worker coordination.
+Worker ownership and lifecycle recovery are currently single-process. Intake
+and arbitrary incident run state survive an API restart, including resolution
+of the confirmed snapshot and optional shelf artifact. A horizontally scaled
+deployment requires shared storage and distributed worker coordination.
 
 ## Evidence Review Demo
 
@@ -198,6 +246,7 @@ uv run pytest -q
 
 cd ../../apps/web
 npm test
+npm run typecheck
 npm run build
 
 cd ../..

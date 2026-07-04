@@ -4,7 +4,8 @@ BatchHelm runs on Alibaba Cloud two ways. Both use **Qwen models on Alibaba
 Cloud Model Studio** as the reasoning engine.
 
 1. **Elastic Compute Service (ECS) with Docker Compose** — simplest path.
-2. **Container Service for Kubernetes (ACK)** — for managed scaling.
+2. **Container Service for Kubernetes (ACK)** - for managed deployment, with
+   the API held to one replica in this release.
 
 ## What runs where
 
@@ -46,11 +47,14 @@ Persistent state is stored on the `batchhelm-data` Docker volume mounted at
 - review ledger: `/data/batchhelm.db`
 - agent memory: `/data/batchhelm-memory.db`
 - orchestration runs, events, and checkpoints: `/data/orchestration.db`
-- shelf-photo uploads: `/data/uploads`
+- intake lifecycle, drafts, and confirmed snapshots: `/data/intake.db`
+- immutable notice, inventory, and shelf artifacts: `/data/uploads/intakes`
 
 Run one API replica for the current SQLite-backed worker model. The run and
-event history survives process restarts, but multiple replicas require a shared
-database plus distributed worker claims or leases.
+intake history survives process restarts, including pending extraction,
+confirmed incident resolution, event replay, and wave recovery. Multiple
+replicas require shared databases and artifact storage plus distributed worker
+claims or leases.
 
 ## Option 2 — Container Service for Kubernetes (ACK)
 
@@ -77,12 +81,16 @@ database plus distributed worker claims or leases.
 Horizontal API scaling is a future mode after the SQLite repositories are
 replaced by shared storage and run ownership is coordinated across workers.
 
+Back up all four SQLite databases and `/data/uploads/intakes` as one recovery
+unit. SQLite WAL files must be checkpointed or captured with a SQLite-aware
+backup before copying a live volume.
+
 ## Secrets
 
 - The Qwen key is injected at runtime via environment only. It is never baked
   into an image, committed, or written to logs.
-- `LOG_LEVEL`, `CORS_ORIGINS`, `RATE_LIMIT_PER_MINUTE`, `REVIEWER_ROLE`, and
-  all storage paths are environment-tunable.
+- `LOG_LEVEL`, `CORS_ORIGINS`, `RATE_LIMIT_PER_MINUTE`, `REVIEWER_ROLE`,
+  `INTAKE_DATABASE_PATH`, and all other storage paths are environment-tunable.
 
 See [alibaba-cloud-proof.md](alibaba-cloud-proof.md) for the explicit record of
 which Alibaba Cloud services and APIs BatchHelm depends on.

@@ -1,52 +1,57 @@
-# Known Limitations & Future Work
+# Known Limitations And Future Work
 
-BatchHelm is honest about what is real today versus what is scaffolded or
-deferred. This is a hackathon build, not a finished commercial product.
+BatchHelm distinguishes the production-shaped workflow implemented in this
+repository from the infrastructure and product breadth still required for a
+commercial rollout.
 
-## What is real
+## What Is Real
 
-- A real agent society (9 specialists + orchestrator) running as a DAG with
-  parallel waves, retries, failure isolation, typed per-wave checkpoints,
-  persist-before-publish ordered events, SSE replay/reconnect, and restart
-  recovery that skips completed waves.
-- Qwen drives recall extraction, inventory-match reasoning, risk classification,
-  customer-notice drafting, shelf-photo interpretation, and the management
-  briefing. Every output is validated against a Pydantic schema and falls back
-  deterministically if Qwen is unavailable or returns an unusable shape.
-- Persistent memory (supplier aliases, decisions, false positives) and an
-  idempotent, append-only review ledger that survives restarts.
-- Production hardening: structured JSON logs, request IDs, fixed-window rate
-  limiting, provider retries with telemetry, sanitized errors, upload limits.
-- Docker images, Compose, CI, and a documented Alibaba Cloud deployment path.
+- Multipart incident intake for text, PDF, scanned PDF, image notices, UTF-8
+  inventory CSVs, and optional shelf evidence, with signature and byte limits.
+- Immutable artifact storage, SHA-256 metadata, restart-safe extraction,
+  field-level provenance, optimistic reviewer versions, and confirmed incident
+  snapshots in a dedicated SQLite repository.
+- A nine-specialist agent society running as a DAG with parallel waves, retries,
+  failure isolation, typed checkpoints, persist-before-publish events, SSE
+  replay, and restart recovery.
+- Intake-backed orchestration that resolves the confirmed incident and exact
+  optional shelf artifact instead of substituting bundled demo data.
+- Qwen-backed extraction, inventory reasoning, risk, communication, shelf
+  interpretation, and management briefing through validated typed contracts.
+- Persistent supplier memory and an idempotent append-only review ledger.
+- Structured logs, request IDs, bounded provider retries, telemetry, sanitized
+  errors, Docker images, Compose, CI, and an Alibaba Cloud deployment path.
 
 ## Limitations
 
-- **Single bundled incident.** The workflow runs against one demo incident.
-  Multi-incident intake and real document upload (PDF/email parsing) are not yet
-  wired; `notice_text` is provided as structured demo data.
-- **Demo-fallback by default.** Without `QWEN_API_KEY`, all model steps use
-  deterministic fallbacks. This is intentional for reliable demos and tests, but
-  it means a no-key run does not exercise live Qwen latency or variability.
-- **Authentication is simulated.** Reviewer identity is a configurable role
-  (`REVIEWER_ROLE`), not real auth. There is no user login or RBAC yet.
-- **Memory is SQLite.** The repository layer is Postgres-ready (interface-based)
-  but the Postgres adapter is not implemented. Orchestration worker ownership is
-  also single-process; multi-node deployments need shared storage and
-  distributed claims or leases.
-- **Vision uses a placeholder image in the demo run.** The shelf-photo endpoint
-  accepts real uploads, but the orchestration demo passes a placeholder so runs
-  are deterministic.
-- **No automated browser/E2E tests.** Frontend reducers and lifecycle hooks have
-  Vitest coverage and the UI has been manually checked at desktop/mobile sizes;
-  Playwright E2E remains future work.
-- **Rate limiting is per-process, in-memory.** Fine for a single instance; a
-  shared store (e.g., Redis) would be needed behind a load balancer.
+- **No multi-incident operations queue.** The API can persist independent
+  intakes, but the dashboard manages one accepted intake session at a time. It
+  does not yet provide assignment, prioritization, search, or queue views.
+- **No mailbox or vendor-portal ingestion.** Operators upload files manually.
+  Automatic email attachment ingestion and supplier connectors are future work.
+- **Fallback is the default without credentials.** No-key runs exercise the
+  same schemas and lifecycle but do not prove live Qwen latency or variability.
+  Real-image fallback is intentionally neutral and requires manual review.
+- **Authentication is simulated.** Reviewer identity comes from
+  `REVIEWER_ROLE`; there is no login, tenant isolation, or RBAC.
+- **SQLite and local artifacts require one API replica.** The repository
+  interfaces are ready for shared adapters, but Postgres, object storage, and
+  distributed extraction or orchestration claims are not implemented.
+- **Rate limiting is per process.** A load-balanced deployment needs a shared
+  limiter such as Redis.
+- **Evidence export is Markdown.** The supplier notice input can be PDF, but the
+  generated audit evidence artifact is currently Markdown rather than a
+  generated PDF.
+- **No automated browser end-to-end suite.** Hooks and components have Vitest
+  coverage and the interface is manually verified at desktop and mobile sizes,
+  but Playwright CI coverage remains future work.
 
-## Future work
+## Future Work
 
-1. Real recall-notice ingestion (email/PDF) with Qwen document parsing.
-2. Postgres (ApsaraDB RDS) adapters and distributed orchestration ownership.
-3. Authentication + reviewer RBAC.
-4. Multi-incident dashboard and queue.
-5. Playwright end-to-end tests and load testing.
-6. Distributed rate limiting and horizontal scaling on ACK.
+1. Multi-incident inbox, queue assignment, and cross-store portfolio views.
+2. Email mailbox, supplier portal, and webhook ingestion.
+3. Authentication, tenant isolation, and reviewer RBAC.
+4. ApsaraDB RDS Postgres adapters, Object Storage Service artifacts, and
+   distributed worker leases.
+5. Shared rate limiting, horizontal ACK scaling, and load testing.
+6. Generated PDF evidence export and automated browser end-to-end tests.

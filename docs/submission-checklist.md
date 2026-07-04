@@ -10,13 +10,16 @@ Track: **Autopilot Agent** (primary), **Agent Society** (secondary).
 - [x] Architecture diagram (`docs/architecture.md`, mermaid)
 - [x] Sample evidence packet artifact (`docs/sample-evidence-packet.md`)
 - [x] Sample incident walkthrough (`docs/sample-incident-walkthrough.md`)
+- [x] Durable real incident intake backend and committed sample packet
 - [x] Demo script (`docs/demo-script.md`)
-- [ ] **Push the durable Mission Control milestone** after Git activity is reopened
+- [x] **Push the durable Mission Control milestone**
+- [ ] **Verify real ambiguous intake in desktop and mobile browsers** and capture populated review evidence
 - [ ] **Deploy the backend on Alibaba Cloud** and capture verifiable service evidence
 - [ ] **Publish a working test URL** that remains available throughout judging
 - [ ] **Verify live Qwen mode** in the deployed app and capture model/source evidence
 - [x] **Measure Agent Society efficiency** against a single-agent baseline (`docs/benchmarks/agent-society-vs-single-agent.md`, reproducible via `services/api/scripts/benchmark_agent_society.py`)
-- [x] **Presentation deck/PPT** with problem, architecture, Qwen use, benchmark, impact, and demo URL (`docs/presentation/batchhelm-ai-hackathon-deck.pptx`; live URL slide pending deployment)
+- [x] Initial presentation deck artifact (`docs/presentation/batchhelm-ai-hackathon-deck.pptx`)
+- [ ] **Overhaul the final presentation deck** with real intake screenshots, live Qwen proof, and deployed URL
 - [ ] **Demo video under 3 minutes** uploaded to YouTube/Vimeo/Youku — *record using the demo script; add the link here and in the README*
 - [ ] Track selected on Devpost: Autopilot Agent
 - [ ] Submit final Devpost entry before the official deadline

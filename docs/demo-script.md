@@ -1,41 +1,46 @@
 # BatchHelm Demo Script (under 3 minutes)
 
-Target: the Qwen Global AI Hackathon submission video. Track: **Autopilot Agent**
-(with a clear **Agent Society** of cooperating specialists).
+Target: Qwen Global AI Hackathon. Primary track: **Autopilot Agent**. Secondary
+track: **Agent Society**.
 
-## Setup (before recording)
+## Setup Before Recording
 
-```bash
-# Backend
-cd services/api && uv sync --extra dev && uv run uvicorn batchhelm_api.app:app --reload
-# Frontend (second terminal)
-cd apps/web && npm install && npm run dev
-```
+1. Set `QWEN_API_KEY` and start the API and web application.
+2. Verify `/api/qwen/status` reports `mode: "live"`.
+3. Open the dashboard at 1280 x 720 with browser zoom at 100%.
+4. Keep `sample-data` open in the file chooser.
+5. Use `inventory-spinach-invalid.csv` so the review warnings are visible.
 
-Set `QWEN_API_KEY` before recording and verify `/api/qwen/status` reports
-`mode: "live"`. Deterministic fallback is for local development and automated
-verification; the submission recording must visibly demonstrate Qwen output.
+Deterministic fallback is for tests and local recovery checks. The submission
+recording must visibly show live Qwen source badges and model status.
 
-## Run of show
+## Run Of Show
 
 | Time | On screen | Say |
 | --- | --- | --- |
-| 0:00–0:20 | Recall inbox / incident summary | "Small grocers get a recall notice and have minutes to act. BatchHelm is an autonomous recall command center." |
-| 0:20–0:45 | Agent Mission Control streaming six waves | "One action starts one durable run. Nine specialists divide the work, with inventory and vision executing in parallel." |
-| 0:45–1:05 | Event timeline and Qwen/source badges | "Every event is persisted before it appears. Source badges distinguish live Qwen reasoning, deterministic safeguards, and memory." |
-| 1:05–1:25 | Select an agent to open its inspector | "The inspector exposes each agent's role, reasoning, confidence, attempts, source, and timing rather than hiding the workflow behind a chat box." |
-| 1:25–1:40 | Reload; the same run and ordered history return | "A refresh reuses the same run ID and replays only missing ordered events. Completed waves survive an API restart." |
-| 1:40–2:00 | Affected inventory and conflict/resolved events | "Qwen extracts the criteria and reasons over matches. The orchestrator resolves disagreement against authoritative inventory before action." |
-| 2:00–2:20 | Tasks and customer notice | "It creates removal, quarantine, and disposal tasks and drafts a customer notice with Qwen." |
-| 2:20–2:40 | Evidence review gate | "Critical release steps require human approval. The idempotent ledger survives restarts and packet regeneration." |
-| 2:40–2:52 | Management briefing and memory | "It briefs management and remembers supplier aliases and prior decisions for the next recall." |
-| 2:52–3:00 | Evidence packet and public URL | "The result is an audit-ready packet, running on Alibaba Cloud and powered by Qwen." |
+| 0:00-0:14 | Dashboard, then **New recall** | "A supplier recall arrives, but a small grocery team still has to find the right lots, shelves, people, and evidence. BatchHelm turns that packet into a controlled response." |
+| 0:14-0:34 | Files stage | "I add the supplier PDF, an inventory export, and a real cooler photo. The API streams them into immutable artifact storage and starts one idempotent intake." |
+| 0:34-0:48 | Extraction progress to Review | "Qwen reads text or rendered notice pages while deterministic parsers validate inventory. This is an operational workflow, not a chat response." |
+| 0:48-1:08 | Criteria fields and provenance | "Every safety-critical field shows confidence and its source location. This supplier field is low confidence, so I correct it before anything can run." |
+| 1:08-1:23 | Save correction; inventory warnings | "The override becomes versioned reviewer evidence. Six valid rows total 23 units, while a negative quantity and duplicate identity are isolated as warnings." |
+| 1:23-1:37 | Launch summary; confirm and run | "Confirmation freezes one immutable incident snapshot. A new request ID can now launch exactly one durable run." |
+| 1:37-2:00 | Agent Mission Control waves | "Nine specialists execute as a dependency graph. Inventory matching and shelf vision run in parallel, then risk, tasks, communications, memory, and compliance follow." |
+| 2:00-2:17 | Shelf Vision inspector | "The vision agent is reading the uploaded Store B photo, not a demo placeholder. Live Qwen evidence is labeled; if vision is unavailable, BatchHelm infers no positive match and requires review." |
+| 2:17-2:31 | Refresh and reconnect | "After refresh, the same intake, run ID, and ordered event history return. Events are persisted before publication, and completed waves are restart checkpoints." |
+| 2:31-2:47 | Review gate and audit timeline | "Actions and customer communication are assembled, but critical release still requires a durable human decision with an immutable audit history." |
+| 2:47-2:58 | Evidence packet, management briefing, public URL | "BatchHelm closes the loop with an audit-ready evidence packet and management briefing, deployed on Alibaba Cloud with Qwen as the reasoning engine." |
 
-## Key lines to land
+## Recording Checks
 
-- "A real agent society, not a static dashboard — every event you see is a real
-  agent step."
-- "Qwen drives extraction, reasoning, risk, comms, and the briefing; a
-  deterministic core keeps it reliable."
-- "Durable run history, memory, and an idempotent review ledger make the
-  workflow recoverable and auditable."
+- Keep the final cut under 3:00.
+- Show `mode: live` and at least one `qwen` source badge.
+- Keep the low-confidence field, provenance locator, two inventory warnings,
+  shelf filename, run ID, and review decision legible.
+- Show the public Alibaba Cloud URL in the final frame.
+- Do not imply that fallback screenshots prove live Qwen execution.
+
+## Key Lines
+
+- "Qwen handles uncertainty; typed contracts and human review control action."
+- "One packet becomes one immutable incident and one recoverable agent run."
+- "The uploaded shelf evidence follows the incident through restart and audit."
