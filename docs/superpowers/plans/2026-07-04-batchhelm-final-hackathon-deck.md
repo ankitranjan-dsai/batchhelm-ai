@@ -53,7 +53,7 @@ Source slide 10 is omitted because its limitations copy is stale and the approve
 - Create outside repository: `$TMP/deviation-log.txt`
 - Create outside repository: `$TMP/source-core.xml`
 
-- [ ] **Step 1: Confirm the repository is clean and preserve the approved source**
+- [x] **Step 1: Confirm the repository is clean and preserve the approved source**
 
 Run:
 
@@ -67,7 +67,7 @@ shasum -a 256 "$DECK" "$SCRATCH/source-deck.pptx"
 
 Expected: `main` tracks `origin/main`, no uncommitted repository files, and both SHA-256 values match.
 
-- [ ] **Step 2: Inspect every inherited slide and object**
+- [x] **Step 2: Inspect every inherited slide and object**
 
 Run:
 
@@ -86,7 +86,7 @@ Expected: eleven slide PNGs, eleven layout JSON files, `template-inspect.ndjson`
   --output "$TMP/template-inspect/source-montage.png"
 ```
 
-- [ ] **Step 3: Record the template audit and intentional deviations**
+- [x] **Step 3: Record the template audit and intentional deviations**
 
 Create `$TMP/template-audit.txt` with:
 
@@ -115,7 +115,7 @@ Slide 10: Add repository, CI, license, and Alibaba deployment-architecture proof
 Source slide 10: Omitted because its stale limitations copy is superseded by the approved close.
 ```
 
-- [ ] **Step 4: Record source metadata before editing**
+- [x] **Step 4: Record source metadata before editing**
 
 Run:
 
@@ -126,7 +126,7 @@ rg -n "creator|lastModifiedBy|title|description" "$TMP/source-core.xml"
 
 Expected: the inherited file's legacy metadata is visible, including the values that must not survive the final export.
 
-- [ ] **Step 5: Verify the source audit**
+- [x] **Step 5: Verify the source audit**
 
 Open the montage and all eleven full-size slide renders. Confirm the canvas is 16:9, title/body placeholders are readable, and no visual element outside the inherited title/body fields must be preserved.
 
@@ -143,7 +143,7 @@ Open the montage and all eleven full-size slide renders. Confirm the canvas is 1
 - Create outside repository: `$TMP/assets/`
 - Create outside repository: `$TMP/evidence-manifest.json`
 
-- [ ] **Step 1: Copy approved raster evidence into scratch**
+- [x] **Step 1: Copy approved raster evidence into scratch**
 
 Run:
 
@@ -158,7 +158,7 @@ cp "$REPO/sample-data/store-b-cooler-spinach.png" "$TMP/assets/"
 
 Expected: five repository-authentic PNG assets exist in scratch.
 
-- [ ] **Step 2: Render the supplier notice without modifying the source PDF**
+- [x] **Step 2: Render the supplier notice without modifying the source PDF**
 
 Run:
 
@@ -174,7 +174,7 @@ pdftoppm \
 
 Expected: `$TMP/assets/recall-notice-spinach.png` is a sharp first-page render.
 
-- [ ] **Step 3: Create a claim-and-asset manifest**
+- [x] **Step 3: Create a claim-and-asset manifest**
 
 Create `$TMP/evidence-manifest.json` with this exact data contract:
 
@@ -210,7 +210,7 @@ Create `$TMP/evidence-manifest.json` with this exact data contract:
 }
 ```
 
-- [ ] **Step 4: Cross-check benchmark values**
+- [x] **Step 4: Cross-check benchmark values**
 
 Run:
 
@@ -230,7 +230,7 @@ Expected: every numeric claim in the manifest is supported by the benchmark docu
 - Create outside repository: `$TMP/template-starter-layout/`
 - Create outside repository: `$TMP/template-starter-contact-sheet.png`
 
-- [ ] **Step 1: Write the complete frame map**
+- [x] **Step 1: Write the complete frame map**
 
 Create `$TMP/template-frame-map.json` with root keys `outputSlides` and `omittedSourceSlides`. Every output slide must target both inherited textbox IDs from `template-inspect.ndjson`; every new visual zone must be declared. Use this pattern for each slide:
 
@@ -302,7 +302,7 @@ Use these approved add zones in source pixel coordinates:
 | 9 | `{ "left": 514, "top": 154, "width": 698, "height": 510 }` |
 | 10 | `{ "left": 596, "top": 154, "width": 616, "height": 510 }` |
 
-- [ ] **Step 2: Validate the frame map before touching the deck**
+- [x] **Step 2: Validate the frame map before touching the deck**
 
 Run:
 
@@ -316,7 +316,7 @@ Run:
 
 Expected: all ten output slides pass; no add-only slide, undeclared primitive, or missing inherited target is reported.
 
-- [ ] **Step 3: Generate the starter deck**
+- [x] **Step 3: Generate the starter deck**
 
 Run:
 
@@ -333,7 +333,7 @@ Run:
 
 Expected: a ten-slide PPTX with source slide 10 omitted and the approved order applied.
 
-- [ ] **Step 4: Inspect the starter and confirm inherited object order**
+- [x] **Step 4: Inspect the starter and confirm inherited object order**
 
 Review `$TMP/template-starter-contact-sheet.png` and all JSON files in `$TMP/template-starter-layout`. Confirm that each slide contains exactly the two inherited textboxes before any approved new primitive is added.
 
@@ -350,7 +350,7 @@ Expected: ten layout files exist, each inherited title is the first shape, each 
 - Create outside repository: `$SCRATCH/set-deck-metadata.applescript`
 - Modify: `docs/presentation/batchhelm-ai-hackathon-deck.pptx`
 
-- [ ] **Step 1: Create the artifact-tool builder**
+- [x] **Step 1: Create the artifact-tool builder**
 
 Start `$SCRATCH/build-final-deck.mjs` with:
 
@@ -422,7 +422,7 @@ function writeBody(slide, text) {
 
 During implementation, inspect the imported starter once with `presentation.inspect(...)`. If inherited object order differs from title-then-body on any slide, resolve those two objects by the IDs in `$TMP/starter-targets.json` instead of positional indexing.
 
-- [ ] **Step 2: Add reusable composition helpers**
+- [x] **Step 2: Add reusable composition helpers**
 
 Implement helpers for:
 
@@ -519,7 +519,7 @@ Rules enforced by the helpers:
 - connectors remain behind node labels using the connector API's default z-order;
 - no gradient, decorative orb, fake browser frame, or stock image is created.
 
-- [ ] **Step 3: Add deterministic export and render hooks**
+- [x] **Step 3: Add deterministic export and render hooks**
 
 End the script with:
 
@@ -549,7 +549,7 @@ Expected: the deck exports successfully and still has ten slides.
 - Modify: `docs/presentation/batchhelm-ai-hackathon-deck.pptx`
 - Create outside repository: `$TMP/checkpoint-1/`
 
-- [ ] **Step 1: Compose the product-first cover**
+- [x] **Step 1: Compose the product-first cover**
 
 Implement slide 1 with:
 
@@ -561,11 +561,11 @@ Implement slide 1 with:
 
 Do not add a deployment badge, live-Qwen badge, feature list, or agenda.
 
-- [ ] **Step 2: Compose the concrete recall problem**
+- [x] **Step 2: Compose the concrete recall problem**
 
 Implement slide 2 with the five approved questions, the rendered supplier notice, and `store-b-cooler-spinach.png`. Label the packet `Synthetic demo packet`; use recall red only as a state signal.
 
-- [ ] **Step 3: Compose Files → Review → Launch**
+- [x] **Step 3: Compose Files → Review → Launch**
 
 Implement slide 3 with readable crops of the Files and Review screens, the three-stage workflow label, and these exact metrics:
 
@@ -575,11 +575,11 @@ Implement slide 3 with readable crops of the Files and Review screens, the three
 
 Include a field-level provenance and confidence callout.
 
-- [ ] **Step 4: Compose the human evidence gate**
+- [x] **Step 4: Compose the human evidence gate**
 
 Implement slide 4 with versioned correction, stale conflict, immutable confirm, launch block, and neutral shelf fallback. Use a distinct crop of the Review screen and the mobile screenshot only where it proves warning/review behavior.
 
-- [ ] **Step 5: Render and inspect slides 1-4**
+- [x] **Step 5: Render and inspect slides 1-4**
 
 Run:
 
