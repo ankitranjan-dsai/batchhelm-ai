@@ -50,9 +50,18 @@ jobs:
         run: ./scripts/check-attribution.sh
 
   docker:
-    name: Docker build
+    name: Docker + deployment bundle
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Build API image
         run: docker build -t batchhelm-api:ci .
+      - name: Build dashboard image
+        run: docker build -t batchhelm-web:ci apps/web
+      - name: Validate production Compose
+        env:
+          BATCHHELM_REVISION: ci
+          PUBLIC_ORIGIN: http://localhost
+          QWEN_API_KEY: ci-placeholder
+          QWEN_PROOF_TOKEN: ci-placeholder
+        run: docker compose -f deploy/alibaba-ecs/compose.yaml config --quiet

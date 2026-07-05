@@ -5,6 +5,7 @@ import yaml
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 COMPOSE_PATH = REPOSITORY_ROOT / "deploy" / "alibaba-ecs" / "compose.yaml"
 BACKUP_PATH = REPOSITORY_ROOT / "deploy" / "alibaba-ecs" / "backup.sh"
+CI_PATH = REPOSITORY_ROOT / ".github" / "workflows" / "ci.yml"
 
 
 def test_ecs_compose_enforces_the_single_replica_storage_contract() -> None:
@@ -44,3 +45,14 @@ def test_backup_quiesces_api_before_capturing_the_recovery_unit() -> None:
 
     assert stop_index < snapshot_index < upload_index
     assert "restart_api" in script
+
+
+def test_ci_builds_both_images_and_validates_production_compose() -> None:
+    workflow = CI_PATH.read_text(encoding="utf-8")
+
+    assert "docker build -t batchhelm-api:ci ." in workflow
+    assert "docker build -t batchhelm-web:ci apps/web" in workflow
+    assert (
+        "docker compose -f deploy/alibaba-ecs/compose.yaml config --quiet"
+        in workflow
+    )

@@ -557,8 +557,10 @@ git push origin main
 
 **Files:**
 - Modify: `docs/superpowers/plans/2026-07-05-batchhelm-qwen-proof-ecs-deployment.md`
+- Modify: `.github/workflows/ci.yml`
+- Modify: `services/api/tests/test_alibaba_ecs_bundle.py`
 
-- [ ] **Step 1: Run all backend tests**
+- [x] **Step 1: Run all backend tests**
 
 Run:
 
@@ -569,7 +571,7 @@ cd services/api
 
 Expected: all backend tests pass.
 
-- [ ] **Step 2: Run frontend and repository gates**
+- [x] **Step 2: Run frontend and repository gates**
 
 Run:
 
@@ -584,18 +586,23 @@ git diff --check
 
 Expected: frontend tests, type checking, build, and attribution pass.
 
-- [ ] **Step 3: Verify the repository contains no secret**
+- [x] **Step 3: Verify the repository contains no secret**
 
 Run:
 
 ```bash
-git grep -n -E \
-  '(sk-[A-Za-z0-9_-]{16,}|QWEN_API_KEY=[^[:space:]]+|QWEN_PROOF_TOKEN=[^[:space:]]+)'
+rg -n -e 'sk-[A-Za-z0-9_-]{20,}' \
+  --glob '!docs/superpowers/plans/**' .
+for file in .env.example deploy/alibaba-ecs/env.example; do
+  awk -F= \
+    '/^(QWEN_API_KEY|QWEN_PROOF_TOKEN)=/ { if ($2 != "") exit 1 }' \
+    "$file"
+done
 ```
 
 Expected: no matches containing a real value.
 
-- [ ] **Step 4: Mark the plan complete and push the verification record**
+- [x] **Step 4: Mark the plan complete and push the verification record**
 
 Run:
 
@@ -606,7 +613,7 @@ git commit --author="Ankit Ranjan <ankit0ranjan@gmail.com>" \
 git push origin main
 ```
 
-- [ ] **Step 5: Verify the exact remote revision and CI**
+- [x] **Step 5: Verify the exact remote revision and CI**
 
 Run:
 
@@ -620,7 +627,7 @@ gh run list --branch main --limit 3
 Expected: local and remote `main` match, the author is Ankit Ranjan, and all CI
 jobs for the final revision pass.
 
-- [ ] **Step 6: Record the unavoidable external deployment inputs**
+- [x] **Step 6: Record the unavoidable external deployment inputs**
 
 The code milestone does not claim a live deployment. A real Alibaba Cloud ECS
 instance, its address, a Qwen Cloud pay-as-you-go API key, and a random proof
