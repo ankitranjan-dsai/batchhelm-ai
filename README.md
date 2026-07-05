@@ -95,6 +95,7 @@ The current product includes:
 - Recall dashboard and incident details
 - Affected inventory map
 - Agent Mission Control with replayable event timeline
+- Inspectable Qwen Cloud evidence control with redacted persisted receipts
 - Shelf-photo evidence inspection
 - Staff task board and customer notice draft
 - Evidence packet preview and durable reviewer approval gate

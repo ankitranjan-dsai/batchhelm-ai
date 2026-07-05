@@ -37,13 +37,19 @@ import {
   submitReviewDecision,
   toIncident,
   uploadShelfPhoto,
+  type ProviderProofState,
   type ProviderStatus,
+  type QwenVerificationReceipt,
   type ShelfInspectionResult,
 } from "./api";
 import { demoIncident } from "./data/demoIncident";
 import { EvidenceReviewGate } from "./EvidenceReviewGate";
 import { IntakeWorkspace } from "./IntakeWorkspace";
 import { MissionControl } from "./MissionControl";
+import {
+  ProviderEvidenceControl,
+  type ProviderEvidenceState,
+} from "./ProviderEvidenceControl";
 import { useIntakeWorkspace } from "./useIntakeWorkspace";
 import { useOrchestrationRun } from "./useOrchestrationRun";
 import type {
@@ -74,7 +80,6 @@ const navItems = [
 ];
 
 type StoreFilter = "all" | "Store A" | "Store B";
-type SyncState = "syncing" | "connected" | "offline";
 type InspectionState = "idle" | "loading" | "ready" | "error";
 type PacketState = "idle" | "loading" | "ready" | "error";
 
@@ -90,7 +95,10 @@ export function App() {
   const [incident, setIncident] = useState<RecallIncident>(demoIncident);
   const [tasks, setTasks] = useState<StaffTask[]>(demoIncident.tasks);
   const [provider, setProvider] = useState<ProviderStatus | null>(null);
-  const [syncState, setSyncState] = useState<SyncState>("syncing");
+  const [providerProof, setProviderProof] =
+    useState<QwenVerificationReceipt | null>(null);
+  const [providerEvidenceState, setProviderEvidenceState] =
+    useState<ProviderEvidenceState>("loading");
   const [inspection, setInspection] = useState<ShelfInspectionResult | null>(null);
   const [inspectionState, setInspectionState] = useState<InspectionState>("idle");
   const [inspectionError, setInspectionError] = useState("");
@@ -113,10 +121,12 @@ export function App() {
           return;
         }
         setProvider(sync.provider);
+        setProviderProof(sync.proof);
+        setProviderEvidenceState(sync.proofState);
       })
       .catch(() => {
         if (active) {
-          setSyncState("offline");
+          setProviderEvidenceState("unavailable");
         }
       });
 
@@ -130,11 +140,8 @@ export function App() {
       const nextIncident = toIncident(orchestration.result.analysis);
       setIncident(nextIncident);
       setTasks(nextIncident.tasks);
-      setSyncState("connected");
-    } else if (orchestration.connection === "failed") {
-      setSyncState("offline");
     }
-  }, [orchestration.connection, orchestration.result]);
+  }, [orchestration.result]);
 
   const filteredInventory = useMemo(() => {
     if (storeFilter === "all") {
@@ -241,7 +248,12 @@ export function App() {
         onSelect={setActiveNav}
       />
       <div className="workspace">
-        <TopBar incident={incident} provider={provider} syncState={syncState} />
+        <TopBar
+          incident={incident}
+          provider={provider}
+          providerProof={providerProof}
+          providerEvidenceState={providerEvidenceState}
+        />
         <main className="dashboard" aria-label="Recall command center">
           <section className="dashboard-grid">
             <IncidentSummary
@@ -444,11 +456,13 @@ function Sidebar({ activeNav, openTaskCount, onSelect }: SidebarProps) {
 function TopBar({
   incident,
   provider,
-  syncState,
+  providerProof,
+  providerEvidenceState,
 }: {
   incident: RecallIncident;
   provider: ProviderStatus | null;
-  syncState: SyncState;
+  providerProof: QwenVerificationReceipt | null;
+  providerEvidenceState: "loading" | ProviderProofState;
 }) {
   return (
     <header className="topbar">
@@ -463,10 +477,11 @@ function TopBar({
       </label>
 
       <div className="topbar-actions">
-        <div className={`provider-chip ${syncState}`}>
-          <span>{syncLabel(syncState)}</span>
-          <strong>{provider ? provider.mode : "local demo"}</strong>
-        </div>
+        <ProviderEvidenceControl
+          provider={provider}
+          proof={providerProof}
+          state={providerEvidenceState}
+        />
         <div className="incident-status">
           <span>Incident Status</span>
           <strong>{incident.status.toUpperCase()}</strong>
@@ -1118,14 +1133,4 @@ function formatPacketTimestamp(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
-}
-
-function syncLabel(syncState: SyncState) {
-  const labels: Record<SyncState, string> = {
-    syncing: "Syncing API",
-    connected: "API Connected",
-    offline: "Local Demo",
-  };
-
-  return labels[syncState];
 }

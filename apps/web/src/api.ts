@@ -139,14 +139,34 @@ interface BackendInventoryRow {
 }
 
 export interface ProviderStatus {
+  provider: string;
   configured: boolean;
+  base_url: string;
   mode: "live" | "demo-fallback";
   text_model: string;
   vision_model: string;
 }
 
+export type ProviderProofState =
+  | "verified"
+  | "not-verified"
+  | "unavailable";
+
+export interface QwenVerificationReceipt {
+  provider: "qwen-cloud";
+  verified: true;
+  model: string;
+  base_url: string;
+  provider_request_id: string | null;
+  latency_ms: number;
+  response_sha256: string;
+  verified_at: string;
+}
+
 export interface DashboardSync {
   provider: ProviderStatus;
+  proof: QwenVerificationReceipt | null;
+  proofState: ProviderProofState;
 }
 
 export interface ShelfInspectionResult {
@@ -391,13 +411,36 @@ async function responseJson<T>(
 }
 
 export async function fetchDashboardSync(): Promise<DashboardSync> {
-  const providerResponse = await fetch(`${API_BASE_URL}/api/qwen/status`);
+  const providerRequest = fetch(`${API_BASE_URL}/api/qwen/status`);
+  const proofRequest = fetch(`${API_BASE_URL}/api/qwen/proof`).catch(
+    () => null,
+  );
+  const [providerResponse, proofResponse] = await Promise.all([
+    providerRequest,
+    proofRequest,
+  ]);
+
   if (!providerResponse.ok) {
     throw new Error(`Provider request failed with ${providerResponse.status}`);
   }
 
   const provider = (await providerResponse.json()) as ProviderStatus;
-  return { provider };
+  if (proofResponse === null) {
+    return { provider, proof: null, proofState: "unavailable" };
+  }
+  if (proofResponse.ok) {
+    return {
+      provider,
+      proof: (await proofResponse.json()) as QwenVerificationReceipt,
+      proofState: "verified",
+    };
+  }
+  return {
+    provider,
+    proof: null,
+    proofState:
+      proofResponse.status === 404 ? "not-verified" : "unavailable",
+  };
 }
 
 export async function startDemoRun(

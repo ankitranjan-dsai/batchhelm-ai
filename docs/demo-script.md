@@ -8,9 +8,11 @@ track: **Agent Society**.
 1. Set `QWEN_API_KEY` and start the API and web application.
 2. Verify `/api/qwen/status` reports `mode: "live"` and `/api/qwen/proof`
    contains a recent successful receipt.
-3. Open the dashboard at 1280 x 720 with browser zoom at 100%.
-4. Keep `sample-data` open in the file chooser.
-5. Use `inventory-spinach-invalid.csv` so the review warnings are visible.
+3. Open the dashboard Qwen Cloud evidence control and confirm it displays
+   `Verified`, the current model, request ID, latency, and UTC timestamp.
+4. Open the dashboard at 1280 x 720 with browser zoom at 100%.
+5. Keep `sample-data` open in the file chooser.
+6. Use `inventory-spinach-invalid.csv` so the review warnings are visible.
 
 Deterministic fallback is for tests and local recovery checks. The submission
 recording must visibly show live Qwen source badges and model status.
@@ -35,6 +37,7 @@ recording must visibly show live Qwen source badges and model status.
 
 - Keep the final cut under 3:00.
 - Show `mode: live` and at least one `qwen` source badge.
+- Open the top-bar Qwen Cloud evidence control and show the redacted receipt.
 - Keep the low-confidence field, provenance locator, two inventory warnings,
   shelf filename, run ID, and review decision legible.
 - Show the public Alibaba Cloud URL in the final frame.

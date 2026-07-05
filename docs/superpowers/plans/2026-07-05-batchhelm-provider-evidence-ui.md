@@ -41,7 +41,7 @@ existing BatchHelm CSS design tokens
 - Create: `apps/web/src/api.test.ts`
 - Modify: `apps/web/src/api.ts`
 
-- [ ] **Step 1: Write failing API client tests**
+- [x] **Step 1: Write failing API client tests**
 
 Add tests for:
 
@@ -56,7 +56,7 @@ Also require:
 - other proof failures become `unavailable` without discarding provider status;
 - provider status and proof requests start in parallel.
 
-- [ ] **Step 2: Run the tests and verify the old contract fails**
+- [x] **Step 2: Run the tests and verify the old contract fails**
 
 Run:
 
@@ -68,7 +68,7 @@ npm test -- src/api.test.ts
 Expected: failures because `DashboardSync` has no proof fields and the client
 does not request `/api/qwen/proof`.
 
-- [ ] **Step 3: Add proof types and parallel fetching**
+- [x] **Step 3: Add proof types and parallel fetching**
 
 Add:
 
@@ -99,7 +99,7 @@ export interface DashboardSync {
 Start both fetches before awaiting either response. Treat proof `404` as a
 valid empty state and other proof failures as a degraded proof state.
 
-- [ ] **Step 4: Verify the client contract**
+- [x] **Step 4: Verify the client contract**
 
 Run:
 
@@ -116,7 +116,7 @@ Expected: all API client tests pass.
 - Create: `apps/web/src/ProviderEvidenceControl.tsx`
 - Create: `apps/web/src/ProviderEvidenceControl.test.tsx`
 
-- [ ] **Step 1: Write failing verified-state tests**
+- [x] **Step 1: Write failing verified-state tests**
 
 Render the component with a live provider and receipt. Require:
 
@@ -127,7 +127,7 @@ Render the component with a live provider and receipt. Require:
   and response fingerprint;
 - credentials and response content are absent.
 
-- [ ] **Step 2: Write failing degraded-state tests**
+- [x] **Step 2: Write failing degraded-state tests**
 
 Require:
 
@@ -137,7 +137,7 @@ Require:
 - loading renders `Checking`;
 - close button and Escape dismiss the dialog.
 
-- [ ] **Step 3: Run tests and verify the component is missing**
+- [x] **Step 3: Run tests and verify the component is missing**
 
 Run:
 
@@ -148,14 +148,14 @@ npm test -- src/ProviderEvidenceControl.test.tsx
 
 Expected: import failure because the component does not exist.
 
-- [ ] **Step 4: Implement the component**
+- [x] **Step 4: Implement the component**
 
 Use `Cloud`, `ShieldCheck`, `AlertTriangle`, and `X` from `lucide-react`.
 Keep state derivation in a small pure function and hoist static labels outside
 the component. Use a native button and `role="dialog"` with
 `aria-modal="true"`.
 
-- [ ] **Step 5: Verify all component states**
+- [x] **Step 5: Verify all component states**
 
 Run:
 
@@ -172,7 +172,7 @@ Expected: all evidence-control tests pass.
 - Modify: `apps/web/src/App.tsx`
 - Modify: `apps/web/src/styles.css`
 
-- [ ] **Step 1: Add dashboard proof state**
+- [x] **Step 1: Add dashboard proof state**
 
 Store:
 
@@ -186,12 +186,12 @@ const [providerProofState, setProviderProofState] =
 On successful synchronization, set provider, proof, and proof state. On status
 failure, set the evidence state to `unavailable`.
 
-- [ ] **Step 2: Replace the static provider chip**
+- [x] **Step 2: Replace the static provider chip**
 
 Render `ProviderEvidenceControl` in `TopBar`. Keep the incident status,
 notification button, and profile control unchanged.
 
-- [ ] **Step 3: Add design-system-consistent styles**
+- [x] **Step 3: Add design-system-consistent styles**
 
 Add:
 
@@ -203,7 +203,7 @@ Add:
 - 320 px responsive behavior;
 - focus, hover, and reduced-motion behavior.
 
-- [ ] **Step 4: Run frontend tests and build**
+- [x] **Step 4: Run frontend tests and build**
 
 Run:
 
@@ -220,12 +220,12 @@ Expected: all tests, TypeScript checks, and the Vite build pass.
 **Files:**
 - Create outside repository: provider evidence screenshots
 
-- [ ] **Step 1: Start the existing local stack**
+- [x] **Step 1: Start the existing local stack**
 
 Run the backend and frontend on available local ports. Use the deterministic
 fallback configuration because no Qwen key is present.
 
-- [ ] **Step 2: Verify the desktop interaction**
+- [x] **Step 2: Verify the desktop interaction**
 
 In the in-app browser:
 
@@ -235,7 +235,7 @@ In the in-app browser:
 4. confirm the dialog is legible and does not shift the top bar;
 5. close it with Escape.
 
-- [ ] **Step 3: Verify the mobile interaction**
+- [x] **Step 3: Verify the mobile interaction**
 
 At 390 x 844:
 
@@ -244,7 +244,7 @@ At 390 x 844:
 - dialog content wraps without horizontal scrolling;
 - close control remains visible.
 
-- [ ] **Step 4: Inspect screenshots**
+- [x] **Step 4: Inspect screenshots**
 
 Use `view_image` on desktop and mobile captures. Check:
 
@@ -263,17 +263,17 @@ Use `view_image` on desktop and mobile captures. Check:
 - Modify: `docs/submission-checklist.md`
 - Modify: `docs/superpowers/plans/2026-07-05-batchhelm-provider-evidence-ui.md`
 
-- [ ] **Step 1: Document the judge-facing control**
+- [x] **Step 1: Document the judge-facing control**
 
 State that the top-bar evidence control distinguishes configured mode from a
 persisted successful live receipt and exposes only redacted metadata.
 
-- [ ] **Step 2: Keep external evidence honest**
+- [x] **Step 2: Keep external evidence honest**
 
 Do not mark live verification, public URL, screenshots, video, or Devpost
 submission complete. Mark only the in-product proof surface complete.
 
-- [ ] **Step 3: Run release gates**
+- [x] **Step 3: Run release gates**
 
 Run:
 
@@ -314,4 +314,3 @@ gh run list --branch main --limit 3
 
 Expected: local and remote `main` match, author and committer are Ankit Ranjan,
 and all CI jobs pass.
-

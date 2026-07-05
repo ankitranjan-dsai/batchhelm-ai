@@ -11,6 +11,7 @@ Submission deadline: **July 9, 2026 at 2:00 PM Pacific Time**.
 - [x] Deployment path for Alibaba Cloud (`Dockerfile`, `docker-compose.yml`, `docs/deployment-alibaba-cloud.md`)
 - [x] Reproducible single-replica ECS release bundle (`deploy/alibaba-ecs/`)
 - [x] Protected live-Qwen verification and redacted SQLite receipt
+- [x] In-product Qwen evidence control that distinguishes configured from verified
 - [x] Architecture diagram (`docs/architecture.md`, mermaid)
 - [x] Sample evidence packet artifact (`docs/sample-evidence-packet.md`)
 - [x] Sample incident walkthrough (`docs/sample-incident-walkthrough.md`)
