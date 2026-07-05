@@ -350,7 +350,7 @@ git push origin main
 - Create: `services/api/tests/test_alibaba_ecs_bundle.py`
 - Modify: `.gitignore`
 
-- [ ] **Step 1: Write the failing deployment contract test**
+- [x] **Step 1: Write the failing deployment contract test**
 
 The test must parse `deploy/alibaba-ecs/compose.yaml` with `yaml.safe_load` and
 assert:
@@ -365,7 +365,7 @@ assert:
   environment values;
 - API replication is fixed at one.
 
-- [ ] **Step 2: Run the deployment test and verify the bundle is absent**
+- [x] **Step 2: Run the deployment test and verify the bundle is absent**
 
 Run:
 
@@ -376,7 +376,7 @@ cd services/api
 
 Expected: failure because `deploy/alibaba-ecs/compose.yaml` does not exist.
 
-- [ ] **Step 3: Add the production Compose file**
+- [x] **Step 3: Add the production Compose file**
 
 Create a source-built deployment that:
 
@@ -390,7 +390,7 @@ Create a source-built deployment that:
 - applies `init: true`, `restart: unless-stopped`, health checks, and
   `no-new-privileges`.
 
-- [ ] **Step 4: Add the secret template**
+- [x] **Step 4: Add the secret template**
 
 `env.example` must include safe names and non-secret defaults only:
 
@@ -404,7 +404,7 @@ QWEN_TEXT_MODEL=qwen3.7-plus
 QWEN_VISION_MODEL=qwen3-vl-plus
 ```
 
-- [ ] **Step 5: Add cloud initialization**
+- [x] **Step 5: Add cloud initialization**
 
 `cloud-init.sh` must be idempotent and:
 
@@ -414,7 +414,7 @@ QWEN_VISION_MODEL=qwen3-vl-plus
 - enable Docker;
 - never accept or write a secret.
 
-- [ ] **Step 6: Add the remote deployment command**
+- [x] **Step 6: Add the remote deployment command**
 
 `deploy.sh` must:
 
@@ -429,7 +429,7 @@ QWEN_VISION_MODEL=qwen3-vl-plus
 - fetch and print the redacted public receipt;
 - remove the local temporary file through a trap.
 
-- [ ] **Step 7: Add a SQLite-aware backup command**
+- [x] **Step 7: Add a SQLite-aware backup command**
 
 `backup.sh` must run inside the API container and use SQLite
 `Connection.backup()` for:
@@ -445,7 +445,7 @@ qwen-proof.db
 Then archive the database snapshots and `uploads/` together under
 `/srv/batchhelm/backups`.
 
-- [ ] **Step 8: Ignore local deployment secrets and proof captures**
+- [x] **Step 8: Ignore local deployment secrets and proof captures**
 
 Add:
 
@@ -456,7 +456,7 @@ deploy/alibaba-ecs/proofs/
 
 to `.gitignore`.
 
-- [ ] **Step 9: Verify deployment contracts and shell syntax**
+- [x] **Step 9: Verify deployment contracts and shell syntax**
 
 Run:
 
@@ -471,7 +471,7 @@ bash -n deploy/alibaba-ecs/backup.sh
 
 Expected: the test and all syntax checks pass.
 
-- [ ] **Step 10: Commit and push the ECS bundle**
+- [x] **Step 10: Commit and push the ECS bundle**
 
 Run:
 

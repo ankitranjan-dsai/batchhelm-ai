@@ -1,0 +1,85 @@
+name: batchhelm
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: batchhelm-api:${BATCHHELM_REVISION:-local}
+    init: true
+    restart: unless-stopped
+    environment:
+      QWEN_API_KEY: "${QWEN_API_KEY:?QWEN_API_KEY is required}"
+      QWEN_BASE_URL: "${QWEN_BASE_URL:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}"
+      QWEN_TEXT_MODEL: "${QWEN_TEXT_MODEL:-qwen3.7-plus}"
+      QWEN_VISION_MODEL: "${QWEN_VISION_MODEL:-qwen3-vl-plus}"
+      QWEN_TIMEOUT_SECONDS: "${QWEN_TIMEOUT_SECONDS:-30}"
+      QWEN_MAX_RETRIES: "${QWEN_MAX_RETRIES:-2}"
+      QWEN_PROOF_TOKEN: "${QWEN_PROOF_TOKEN:?QWEN_PROOF_TOKEN is required}"
+      APP_ENV: production
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      CORS_ORIGINS: "${PUBLIC_ORIGIN:-http://localhost}"
+      RATE_LIMIT_PER_MINUTE: "${RATE_LIMIT_PER_MINUTE:-120}"
+      REVIEWER_ROLE: "${REVIEWER_ROLE:-Operations Manager}"
+      DATABASE_PATH: /data/batchhelm.db
+      MEMORY_PATH: /data/batchhelm-memory.db
+      ORCHESTRATION_DATABASE_PATH: /data/orchestration.db
+      INTAKE_DATABASE_PATH: /data/intake.db
+      QWEN_PROOF_DATABASE_PATH: /data/qwen-proof.db
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      - "${BATCHHELM_DATA_DIR:-/srv/batchhelm/data}:/data"
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          raise SystemExit(0 if urllib.request.urlopen(
+          'http://localhost:8000/health', timeout=3).status == 200 else 1)
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 1536M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  web:
+    build:
+      context: ../../apps/web
+      dockerfile: Dockerfile
+    image: batchhelm-web:${BATCHHELM_REVISION:-local}
+    init: true
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
