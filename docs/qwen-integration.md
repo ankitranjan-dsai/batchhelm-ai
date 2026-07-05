@@ -1,10 +1,16 @@
 # Qwen Cloud Integration
 
-BatchHelm uses Qwen Cloud through Alibaba Cloud Model Studio's OpenAI-compatible chat API. The integration is isolated in `services/api/src/batchhelm_api/qwen.py` so the rest of the product can use typed workflow outputs without depending on provider-specific request details.
+BatchHelm uses Qwen Cloud through its OpenAI-compatible chat API. The
+integration is isolated in `services/api/src/batchhelm_api/qwen.py` so the rest
+of the product can use typed workflow outputs without depending on
+provider-specific request details.
 
 Official reference:
 
-- Alibaba Cloud Model Studio compatibility guide: `https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope`
+- Qwen Cloud first API call:
+  `https://docs.qwencloud.com/developer-guides/getting-started/first-api-call`
+- Qwen Cloud structured output:
+  `https://docs.qwencloud.com/developer-guides/text-generation/structured-output`
 
 ## Environment Variables
 
@@ -13,10 +19,12 @@ Set these values in your runtime environment or a local `.env` file:
 ```bash
 QWEN_API_KEY=your-model-studio-key
 QWEN_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
-QWEN_TEXT_MODEL=qwen-plus
-QWEN_VISION_MODEL=qwen-vl-plus
+QWEN_TEXT_MODEL=qwen3.7-plus
+QWEN_VISION_MODEL=qwen3-vl-plus
+QWEN_PROOF_TOKEN=a-long-random-deployment-proof-token
 ORCHESTRATION_DATABASE_PATH=./data/orchestration.db
 INTAKE_DATABASE_PATH=./data/intake.db
+QWEN_PROOF_DATABASE_PATH=./data/qwen-proof.db
 UPLOAD_DIR=./data/uploads
 VITE_API_BASE_URL=http://localhost:8000
 ```
@@ -31,6 +39,26 @@ BatchHelm supports two modes:
 - `demo-fallback`: no key is configured, so the backend returns deterministic structured demo outputs.
 
 The fallback mode exists so demos, tests, and screenshots stay reliable without external credentials. It does not replace the Qwen integration; it keeps the product usable while credentials are absent.
+
+`mode: "live"` means a key is configured. It is not a network-success claim.
+Use the persisted verification receipt below for that stronger evidence.
+
+## Live Provider Verification
+
+The billable verification endpoint is separate from normal status:
+
+```bash
+curl -fsS -X POST \
+  -H "X-BatchHelm-Proof-Token: $QWEN_PROOF_TOKEN" \
+  http://localhost:8000/api/qwen/verify
+
+curl -fsS http://localhost:8000/api/qwen/proof
+```
+
+The first call uses Qwen Cloud and stores a redacted receipt. The second reads
+that receipt without spending tokens. The receipt contains provider metadata,
+latency, time, and a response fingerprint, but never the request, response
+body, or credentials.
 
 ## Qwen Drives The Workflow
 
@@ -68,6 +96,8 @@ positive match.
 ## Provider Surface (API)
 
 - `GET /api/qwen/status` — provider mode + configured models
+- `POST /api/qwen/verify` — protected real-call verification + persisted receipt
+- `GET /api/qwen/proof` — latest public redacted verification receipt
 - `POST /api/intakes` — stores a real packet and starts typed extraction
 - `GET /api/intakes/{intake_id}` — returns extraction status and provenance
 - `PATCH /api/intakes/{intake_id}/draft` — saves reviewer evidence

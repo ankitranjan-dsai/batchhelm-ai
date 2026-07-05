@@ -1,96 +1,170 @@
-# Deploying BatchHelm on Alibaba Cloud
+# Deploying BatchHelm On Alibaba Cloud ECS
 
-BatchHelm runs on Alibaba Cloud two ways. Both use **Qwen models on Alibaba
-Cloud Model Studio** as the reasoning engine.
+BatchHelm's release deployment is a single Alibaba Cloud Elastic Compute
+Service instance running Docker Compose. One FastAPI container owns the SQLite
+worker lifecycle, one nginx container serves the React application and proxies
+same-origin API traffic, and Qwen Cloud provides text and vision inference.
 
-1. **Elastic Compute Service (ECS) with Docker Compose** — simplest path.
-2. **Container Service for Kubernetes (ACK)** - for managed deployment, with
-   the API held to one replica in this release.
+The repository contains the complete deployment bundle under
+`deploy/alibaba-ecs/`.
 
-## What runs where
+## Deployment Status
 
-| Component | Image | Port | Notes |
-| --- | --- | --- | --- |
-| `api` | `batchhelm-api` (root `Dockerfile`) | 8000 | FastAPI + agent orchestrator |
-| `web` | `batchhelm-web` (`apps/web/Dockerfile`) | 80 | Vite build served by nginx, proxies `/api` |
-| Qwen | Alibaba Cloud Model Studio | — | OpenAI-compatible endpoint, called from `api` |
+The deployment automation is implemented and tested. A live ECS address and
+live Qwen proof are intentionally not claimed until the commands below run
+against an Alibaba Cloud account.
 
-## Option 1 — ECS + Docker Compose
+## Runtime Topology
 
-1. Create an ECS instance (Ubuntu 22.04, 2 vCPU / 4 GB is enough for the demo).
-2. Install Docker and the Compose plugin.
-3. Clone the repository and create an env file:
+| Component | Exposure | Responsibility |
+| --- | --- | --- |
+| `web` | ECS TCP `80` | React dashboard, `/api` reverse proxy, SSE |
+| `api` | Compose network only | FastAPI, nine-agent orchestrator, proof endpoint |
+| `/srv/batchhelm/data` | ECS disk | Five SQLite databases and uploaded evidence |
+| Qwen Cloud | Outbound HTTPS | `qwen3.7-plus` text and `qwen3-vl-plus` vision |
 
-   ```bash
-   cp .env.example .env
-   # edit .env and set QWEN_API_KEY to your Model Studio key
-   ```
+The API is fixed at one replica because run ownership and worker claims are
+SQLite-backed. The web service is the only public container port.
 
-4. Build and start:
+## 1. Create The ECS Instance
 
-   ```bash
-   docker compose up -d --build
-   ```
+Create an Ubuntu 22.04 or 24.04 ECS instance with:
 
-5. Verify:
+- at least 2 vCPU and 4 GB RAM;
+- a public IPv4 address or Elastic IP;
+- an SSH key pair rather than a password;
+- enough disk space for images, SQLite state, uploads, and backups.
 
-   ```bash
-   curl http://<ecs-public-ip>:8000/health
-   curl http://<ecs-public-ip>:8000/api/qwen/status   # mode: "live" when the key is set
-   ```
+Use this security group:
 
-   The dashboard is on port `8080`.
+| Port | Source | Purpose |
+| --- | --- | --- |
+| TCP `22` | operator public IP only | deployment and maintenance |
+| TCP `80` | `0.0.0.0/0` | public judging URL |
 
-Persistent state is stored on the `batchhelm-data` Docker volume mounted at
-`/data`:
+Do not expose TCP `8000`. The nginx container reaches FastAPI over the private
+Compose network.
 
-- review ledger: `/data/batchhelm.db`
-- agent memory: `/data/batchhelm-memory.db`
-- orchestration runs, events, and checkpoints: `/data/orchestration.db`
-- intake lifecycle, drafts, and confirmed snapshots: `/data/intake.db`
-- immutable notice, inventory, and shelf artifacts: `/data/uploads/intakes`
+Alibaba Cloud's ECS user-data documentation recommends cloud-init for
+repeatable initialization:
+`https://www.alibabacloud.com/help/en/ecs/user-guide/customize-the-initialization-configuration-for-an-instance`.
 
-Run one API replica for the current SQLite-backed worker model. The run and
-intake history survives process restarts, including pending extraction,
-confirmed incident resolution, event replay, and wave recovery. Multiple
-replicas require shared databases and artifact storage plus distributed worker
-claims or leases.
+## 2. Bootstrap The Host
 
-## Option 2 — Container Service for Kubernetes (ACK)
+Connect to the instance, clone the public repository, and run the idempotent
+host bootstrap:
 
-1. Push both images to Alibaba Cloud Container Registry (ACR):
+```bash
+sudo apt-get update
+sudo apt-get install -y git
+git clone https://github.com/ankitranjan-dsai/batchhelm-ai.git
+cd batchhelm-ai
+sudo bash deploy/alibaba-ecs/cloud-init.sh
+```
 
-   ```bash
-   docker build -t registry.<region>.aliyuncs.com/<ns>/batchhelm-api:0.2.0 .
-   docker build -t registry.<region>.aliyuncs.com/<ns>/batchhelm-web:0.2.0 apps/web
-   docker push registry.<region>.aliyuncs.com/<ns>/batchhelm-api:0.2.0
-   docker push registry.<region>.aliyuncs.com/<ns>/batchhelm-web:0.2.0
-   ```
+The script installs Docker Engine, Compose, git, curl, and jq; enables Docker;
+and creates:
 
-2. Store the Qwen key as a Kubernetes secret:
+```text
+/opt/batchhelm
+/srv/batchhelm/data
+/srv/batchhelm/backups
+```
 
-   ```bash
-   kubectl create secret generic batchhelm-qwen --from-literal=QWEN_API_KEY=<key>
-   ```
+It does not accept, log, or write application secrets.
 
-3. Deploy the `api` and `web` Deployments + Services, mounting the secret as
-   the `QWEN_API_KEY` environment variable, and attach a persistent volume for
-   `/data`. Keep the API Deployment at one replica for this release. Front the
-   `web` Service with an Alibaba Cloud SLB / Ingress.
+## 3. Deploy An Exact Revision
 
-Horizontal API scaling is a future mode after the SQLite repositories are
-replaced by shared storage and run ownership is coordinated across workers.
+Run the deployment command from the local repository:
 
-Back up all four SQLite databases and `/data/uploads/intakes` as one recovery
-unit. SQLite WAL files must be checkpointed or captured with a SQLite-aware
-backup before copying a live volume.
+```bash
+export BATCHHELM_HOST=ecs-user@ecs-address
+export QWEN_API_KEY='the Qwen Cloud pay-as-you-go key'
+export QWEN_PROOF_TOKEN="$(openssl rand -hex 32)"
 
-## Secrets
+bash deploy/alibaba-ecs/deploy.sh
+```
 
-- The Qwen key is injected at runtime via environment only. It is never baked
-  into an image, committed, or written to logs.
-- `LOG_LEVEL`, `CORS_ORIGINS`, `RATE_LIMIT_PER_MINUTE`, `REVIEWER_ROLE`,
-  `INTAKE_DATABASE_PATH`, and all other storage paths are environment-tunable.
+Optional variables:
 
-See [alibaba-cloud-proof.md](alibaba-cloud-proof.md) for the explicit record of
-which Alibaba Cloud services and APIs BatchHelm depends on.
+```bash
+export BATCHHELM_SSH_KEY="$HOME/.ssh/alibaba-ecs"
+export PUBLIC_ORIGIN="http://ecs-address"
+export BATCHHELM_REVISION="$(git rev-parse HEAD)"
+```
+
+`deploy.sh`:
+
+1. validates required inputs without printing them;
+2. transfers a mode-`600` environment file;
+3. checks out the exact 40-character commit SHA on ECS;
+4. builds both containers from that revision;
+5. starts the one-replica production topology;
+6. waits for the proxied health endpoint;
+7. performs one protected live Qwen Cloud verification;
+8. reads the public redacted receipt.
+
+The Qwen key and proof token are runtime values. They are not image layers,
+source files, command output, or receipt fields.
+
+## 4. Verify The Deployment
+
+The deploy command performs these checks automatically. They can also be run
+independently:
+
+```bash
+curl -fsS http://ecs-address/health | jq .
+curl -fsS http://ecs-address/api/qwen/status | jq .
+curl -fsS http://ecs-address/api/qwen/proof | jq .
+```
+
+Expected health:
+
+```json
+{"status":"ok","service":"batchhelm-api","version":"0.2.0"}
+```
+
+`/api/qwen/status` reports configuration and model selection. It does not prove
+that a network call succeeded. `/api/qwen/proof` returns the latest persisted
+successful provider receipt and is the stronger evidence.
+
+## 5. Back Up The Recovery Unit
+
+On ECS:
+
+```bash
+sudo bash /opt/batchhelm/deploy/alibaba-ecs/backup.sh
+```
+
+The command stops API writes, creates SQLite-native backups through
+`Connection.backup()`, copies uploaded artifacts, creates a timestamped archive
+under `/srv/batchhelm/backups`, and restarts the API. It captures:
+
+- `batchhelm.db`;
+- `batchhelm-memory.db`;
+- `orchestration.db`;
+- `intake.db`;
+- `qwen-proof.db`;
+- `uploads/`.
+
+## 6. Update Or Roll Back
+
+Deploy the current revision:
+
+```bash
+export BATCHHELM_REVISION="$(git rev-parse HEAD)"
+bash deploy/alibaba-ecs/deploy.sh
+```
+
+Roll back by exporting a previously verified full commit SHA and running the
+same command. State remains on `/srv/batchhelm/data`.
+
+## ACK Is A Future Scale Mode
+
+Alibaba Cloud Container Service for Kubernetes remains a valid later target,
+but increasing API replicas now would create competing SQLite worker owners.
+ACK requires shared databases, shared artifact storage, and distributed leases
+before it is an honest production topology.
+
+See [alibaba-cloud-proof.md](alibaba-cloud-proof.md) for the submission evidence
+boundary and [qwen-integration.md](qwen-integration.md) for provider behavior.

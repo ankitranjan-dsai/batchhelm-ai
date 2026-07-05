@@ -6,7 +6,8 @@ track: **Agent Society**.
 ## Setup Before Recording
 
 1. Set `QWEN_API_KEY` and start the API and web application.
-2. Verify `/api/qwen/status` reports `mode: "live"`.
+2. Verify `/api/qwen/status` reports `mode: "live"` and `/api/qwen/proof`
+   contains a recent successful receipt.
 3. Open the dashboard at 1280 x 720 with browser zoom at 100%.
 4. Keep `sample-data` open in the file chooser.
 5. Use `inventory-spinach-invalid.csv` so the review warnings are visible.

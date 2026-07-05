@@ -18,7 +18,7 @@ BatchHelm is designed for small grocery chains, restaurants, pharmacies, cafeter
 ## Hackathon Track Fit
 
 BatchHelm is built for the **Qwen Global AI Hackathon** and runs on Qwen models
-via Alibaba Cloud Model Studio's OpenAI-compatible endpoint.
+through Qwen Cloud's OpenAI-compatible endpoint.
 
 **Primary track — Autopilot Agent.** BatchHelm runs an end-to-end recall
 response workflow: intake → Qwen extraction → inventory matching → vision →
@@ -184,6 +184,8 @@ Important endpoints:
 | `GET` | `/api/evidence/demo-review` | Returns packet readiness, blockers, release checks, and audit history |
 | `POST` | `/api/evidence/demo-review/decision` | Persists an idempotent reviewer decision and returns the complete audit history |
 | `GET` | `/api/qwen/status` | Reports Qwen gateway mode and configured models |
+| `POST` | `/api/qwen/verify` | Performs a token-protected live Qwen verification and stores a redacted receipt |
+| `GET` | `/api/qwen/proof` | Returns the latest persisted redacted Qwen receipt without another model call |
 | `POST` | `/api/qwen/recall-summary` | Generates a structured recall summary |
 | `POST` | `/api/notices/customer-draft` | Generates a customer notice draft |
 
@@ -277,6 +279,20 @@ Alibaba Cloud (ECS / ACK) deployment is documented in
 explicit record of Alibaba Cloud usage is in
 [docs/alibaba-cloud-proof.md](docs/alibaba-cloud-proof.md).
 
+The production ECS path is reproducible:
+
+```bash
+export BATCHHELM_HOST=ecs-user@ecs-address
+export QWEN_API_KEY='the Qwen Cloud pay-as-you-go key'
+export QWEN_PROOF_TOKEN="$(openssl rand -hex 32)"
+bash deploy/alibaba-ecs/deploy.sh
+```
+
+The script deploys the exact local commit, waits for health, performs one
+protected live Qwen call, and prints the public redacted proof receipt. A public
+URL is not claimed in this README until that external deployment has been
+captured.
+
 ## Submission
 
 - Track: **Autopilot Agent** (primary), **Agent Society** (secondary)
@@ -285,7 +301,7 @@ explicit record of Alibaba Cloud usage is in
 - Sample artifacts: [evidence packet](docs/sample-evidence-packet.md) ·
   [incident walkthrough](docs/sample-incident-walkthrough.md)
 - Known limitations: [docs/known-limitations.md](docs/known-limitations.md)
-- Demo video: _add link after recording_
+- Demo video: not yet recorded; required before the July 9 submission deadline
 
 ## Author
 

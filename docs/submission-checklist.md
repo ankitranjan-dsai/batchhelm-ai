@@ -2,11 +2,15 @@
 
 Track: **Autopilot Agent** (primary), **Agent Society** (secondary).
 
+Submission deadline: **July 9, 2026 at 2:00 PM Pacific Time**.
+
 ## Required items
 
 - [x] Public open-source repository with MIT license
 - [x] Text description of features and functionality (`README.md`)
 - [x] Deployment path for Alibaba Cloud (`Dockerfile`, `docker-compose.yml`, `docs/deployment-alibaba-cloud.md`)
+- [x] Reproducible single-replica ECS release bundle (`deploy/alibaba-ecs/`)
+- [x] Protected live-Qwen verification and redacted SQLite receipt
 - [x] Architecture diagram (`docs/architecture.md`, mermaid)
 - [x] Sample evidence packet artifact (`docs/sample-evidence-packet.md`)
 - [x] Sample incident walkthrough (`docs/sample-incident-walkthrough.md`)
@@ -18,8 +22,8 @@ Track: **Autopilot Agent** (primary), **Agent Society** (secondary).
 - [ ] **Publish a working test URL** that remains available throughout judging
 - [ ] **Verify live Qwen mode** in the deployed app and capture model/source evidence
 - [x] **Measure Agent Society efficiency** against a single-agent baseline (`docs/benchmarks/agent-society-vs-single-agent.md`, reproducible via `services/api/scripts/benchmark_agent_society.py`)
-- [x] Initial presentation deck artifact (`docs/presentation/batchhelm-ai-hackathon-deck.pptx`)
-- [ ] **Overhaul the final presentation deck** with real intake screenshots, live Qwen proof, and deployed URL
+- [x] Final proof-first presentation deck with real intake screenshots (`docs/presentation/batchhelm-ai-hackathon-deck.pptx`)
+- [ ] **Update the final deck with the deployed URL and captured live-Qwen proof**
 - [ ] **Demo video under 3 minutes** uploaded to YouTube/Vimeo/Youku — *record using the demo script; add the link here and in the README*
 - [ ] Track selected on Devpost: Autopilot Agent
 - [ ] Submit final Devpost entry before the official deadline

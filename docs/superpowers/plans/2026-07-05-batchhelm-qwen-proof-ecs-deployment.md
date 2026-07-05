@@ -489,9 +489,10 @@ git push origin main
 - Modify: `docs/alibaba-cloud-proof.md`
 - Modify: `docs/qwen-integration.md`
 - Modify: `docs/submission-checklist.md`
+- Modify: `docs/demo-script.md`
 - Modify: `README.md`
 
-- [ ] **Step 1: Replace console-only deployment guidance**
+- [x] **Step 1: Replace console-only deployment guidance**
 
 Document the exact sequence:
 
@@ -509,7 +510,7 @@ Explain the required ECS security group:
 - TCP `80` from `0.0.0.0/0`;
 - no public TCP `8000`.
 
-- [ ] **Step 2: Document the proof receipt**
+- [x] **Step 2: Document the proof receipt**
 
 Explain:
 
@@ -518,20 +519,22 @@ Explain:
 - the receipt proves endpoint, model, provider response ID, latency, timestamp,
   and response fingerprint without exposing content or credentials.
 
-- [ ] **Step 3: Correct the submission status**
+- [x] **Step 3: Correct the submission status**
 
 Keep deployment, public URL, live Qwen verification, video, and final Devpost
 submission unchecked until real external evidence exists. Mark only the
 deployment automation and verification mechanism as complete.
 
-- [ ] **Step 4: Verify documentation accuracy and attribution**
+- [x] **Step 4: Verify documentation accuracy and attribution**
 
 Run:
 
 ```bash
 rg -n "qwen-plus|qwen-vl-plus" \
-  README.md .env.example docker-compose.yml docs deploy \
-  services/api/src/batchhelm_api/config.py
+  README.md .env.example docker-compose.yml \
+  docs/deployment-alibaba-cloud.md docs/alibaba-cloud-proof.md \
+  docs/qwen-integration.md docs/submission-checklist.md \
+  deploy services/api/src/batchhelm_api/config.py
 ./scripts/check-attribution.sh
 git diff --check
 ```
@@ -539,7 +542,7 @@ git diff --check
 Expected: legacy default model names do not remain in current configuration or
 deployment guidance, attribution passes, and the diff has no whitespace errors.
 
-- [ ] **Step 5: Commit and push documentation**
+- [x] **Step 5: Commit and push documentation**
 
 Run:
 
