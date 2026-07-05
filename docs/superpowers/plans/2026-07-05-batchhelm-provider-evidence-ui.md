@@ -290,7 +290,7 @@ git diff --check
 
 Expected: backend, frontend, attribution, and diff checks pass.
 
-- [ ] **Step 4: Commit and push**
+- [x] **Step 4: Commit and push**
 
 Run:
 
@@ -301,7 +301,7 @@ git commit --author="Ankit Ranjan <ankit0ranjan@gmail.com>" \
 git push origin main
 ```
 
-- [ ] **Step 5: Verify remote CI**
+- [x] **Step 5: Verify remote CI**
 
 Run:
 
