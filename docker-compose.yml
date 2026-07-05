@@ -10,8 +10,8 @@ services:
     environment:
       QWEN_API_KEY: ${QWEN_API_KEY:-}
       QWEN_BASE_URL: ${QWEN_BASE_URL:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
-      QWEN_TEXT_MODEL: ${QWEN_TEXT_MODEL:-qwen-plus}
-      QWEN_VISION_MODEL: ${QWEN_VISION_MODEL:-qwen-vl-plus}
+      QWEN_TEXT_MODEL: ${QWEN_TEXT_MODEL:-qwen3.7-plus}
+      QWEN_VISION_MODEL: ${QWEN_VISION_MODEL:-qwen3-vl-plus}
       APP_ENV: production
       LOG_LEVEL: info
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}

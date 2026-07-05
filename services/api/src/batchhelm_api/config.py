@@ -13,9 +13,11 @@ class Settings(BaseSettings):
         default="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
         validation_alias="QWEN_BASE_URL",
     )
-    qwen_text_model: str = Field(default="qwen-plus", validation_alias="QWEN_TEXT_MODEL")
+    qwen_text_model: str = Field(
+        default="qwen3.7-plus", validation_alias="QWEN_TEXT_MODEL"
+    )
     qwen_vision_model: str = Field(
-        default="qwen-vl-plus", validation_alias="QWEN_VISION_MODEL"
+        default="qwen3-vl-plus", validation_alias="QWEN_VISION_MODEL"
     )
     qwen_timeout_seconds: float = Field(
         default=30.0, validation_alias="QWEN_TIMEOUT_SECONDS"

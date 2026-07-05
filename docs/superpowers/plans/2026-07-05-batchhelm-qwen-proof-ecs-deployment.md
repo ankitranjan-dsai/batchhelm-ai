@@ -53,7 +53,7 @@ Primary references:
 - Modify: `.env.example`
 - Modify: `docker-compose.yml`
 
-- [ ] **Step 1: Write the failing configuration contract test**
+- [x] **Step 1: Write the failing configuration contract test**
 
 Create `services/api/tests/test_config.py`:
 
@@ -71,7 +71,7 @@ def test_qwen_cloud_defaults_use_current_supported_models() -> None:
     assert settings.qwen_vision_model == "qwen3-vl-plus"
 ```
 
-- [ ] **Step 2: Run the test and verify the old defaults fail**
+- [x] **Step 2: Run the test and verify the old defaults fail**
 
 Run:
 
@@ -82,7 +82,7 @@ cd services/api
 
 Expected: failure showing `qwen-plus` instead of `qwen3.7-plus`.
 
-- [ ] **Step 3: Update the defaults**
+- [x] **Step 3: Update the defaults**
 
 Set these defaults in `config.py`, `.env.example`, and `docker-compose.yml`:
 
@@ -91,7 +91,7 @@ QWEN_TEXT_MODEL=qwen3.7-plus
 QWEN_VISION_MODEL=qwen3-vl-plus
 ```
 
-- [ ] **Step 4: Verify the configuration contract**
+- [x] **Step 4: Verify the configuration contract**
 
 Run:
 
@@ -102,7 +102,7 @@ cd services/api
 
 Expected: all selected tests pass.
 
-- [ ] **Step 5: Commit and push the Qwen Cloud alignment**
+- [x] **Step 5: Commit and push the Qwen Cloud alignment**
 
 Run:
 
@@ -627,4 +627,3 @@ token are still required to produce:
 - the persisted live-Qwen verification receipt;
 - Alibaba Workbench/ECS screenshots;
 - the final demo video and Devpost submission.
-
