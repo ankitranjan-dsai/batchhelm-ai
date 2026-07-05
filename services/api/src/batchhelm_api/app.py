@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+import secrets
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, suppress
 from typing import Annotated, Any
 from uuid import uuid4
@@ -66,6 +67,7 @@ from batchhelm_api.models import (
     OrchestrationRunView,
     OrchestrationStartRequest,
     ProviderStatus,
+    QwenVerificationReceipt,
     RecallAnalysis,
     RecallIncidentInput,
     ReviewDecisionRequest,
@@ -90,6 +92,11 @@ from batchhelm_api.observability import (
 )
 from batchhelm_api.qwen import QwenGateway, QwenGatewayError
 from batchhelm_api.qwen_tasks import generate_briefing
+from batchhelm_api.qwen_verification_repository import (
+    QwenVerificationRepository,
+    QwenVerificationStoreUnavailable,
+    SQLiteQwenVerificationRepository,
+)
 from batchhelm_api.review_repository import (
     ReviewIdempotencyConflict,
     ReviewRepository,
@@ -119,6 +126,8 @@ def create_app(
     memory_repository: MemoryRepository | None = None,
     orchestration_repository: OrchestrationRepository | None = None,
     intake_repository: IntakeRepository | None = None,
+    qwen_gateway_factory: Callable[[], QwenGateway] | None = None,
+    qwen_verification_repository: QwenVerificationRepository | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     configure_logging(resolved_settings.log_level)
@@ -160,15 +169,27 @@ def create_app(
     except IntakeStoreUnavailable as exc:
         intake_store = UnavailableIntakeRepository(exc)
 
+    verification_store = (
+        qwen_verification_repository
+        or SQLiteQwenVerificationRepository(
+            resolved_settings.qwen_proof_database_path
+        )
+    )
+    verification_store.initialize()
+
+    gateway_factory = qwen_gateway_factory or (
+        lambda: QwenGateway(resolved_settings)
+    )
+
     intake_service = IntakeService(
         repository=intake_store,
         artifact_root=resolved_settings.upload_dir,
-        gateway_factory=lambda: QwenGateway(resolved_settings),
+        gateway_factory=gateway_factory,
     )
 
     def build_orchestrator() -> Orchestrator:
         return Orchestrator(
-            gateway=QwenGateway(resolved_settings),
+            gateway=gateway_factory(),
             memory=memory,
             settings=resolved_settings,
         )
@@ -208,6 +229,8 @@ def create_app(
     app.state.orchestration_service = orchestration_service
     app.state.intake_service = intake_service
     app.state.telemetry = telemetry
+    app.state.qwen_gateway_factory = gateway_factory
+    app.state.qwen_verification_repository = verification_store
 
     # Inner middleware first; CORS added last so it stays outermost and always
     # decorates responses (including rate-limit 429s) with CORS headers.
@@ -231,6 +254,19 @@ def create_app(
         return JSONResponse(
             status_code=502,
             content=APIError(code="qwen_gateway_error", message=str(exc)).model_dump(),
+        )
+
+    @app.exception_handler(QwenVerificationStoreUnavailable)
+    async def qwen_verification_store_handler(
+        _request: Request,
+        _exc: QwenVerificationStoreUnavailable,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content=APIError(
+                code="qwen_proof_store_unavailable",
+                message="Qwen verification proof is temporarily unavailable.",
+            ).model_dump(),
         )
 
     @app.exception_handler(ReviewIdempotencyConflict)
@@ -691,6 +727,49 @@ def create_app(
     async def qwen_status(gateway: QwenGateway = Depends(get_qwen_gateway)) -> ProviderStatus:
         return gateway.status()
 
+    @app.post("/api/qwen/verify", response_model=QwenVerificationReceipt)
+    async def verify_qwen(
+        request: Request,
+        gateway: QwenGateway = Depends(get_qwen_gateway),
+    ) -> QwenVerificationReceipt | JSONResponse:
+        expected_token = resolved_settings.qwen_proof_token.strip()
+        if not expected_token:
+            return JSONResponse(
+                status_code=503,
+                content=APIError(
+                    code="qwen_proof_disabled",
+                    message="Live Qwen verification is not enabled.",
+                ).model_dump(),
+            )
+
+        supplied_token = request.headers.get("X-BatchHelm-Proof-Token", "")
+        if not secrets.compare_digest(supplied_token, expected_token):
+            return JSONResponse(
+                status_code=403,
+                content=APIError(
+                    code="qwen_proof_forbidden",
+                    message="The Qwen verification token is invalid.",
+                ).model_dump(),
+            )
+
+        receipt = await gateway.verify_live()
+        verification_store.save(receipt)
+        telemetry.increment("qwen_verifications")
+        return receipt
+
+    @app.get("/api/qwen/proof", response_model=QwenVerificationReceipt)
+    async def qwen_proof() -> QwenVerificationReceipt | JSONResponse:
+        receipt = verification_store.latest()
+        if receipt is None:
+            return JSONResponse(
+                status_code=404,
+                content=APIError(
+                    code="qwen_proof_not_found",
+                    message="No successful live Qwen verification has been recorded.",
+                ).model_dump(),
+            )
+        return receipt
+
     @app.post("/api/qwen/recall-summary", response_model=ModelJSONResponse)
     async def qwen_recall_summary(
         gateway: QwenGateway = Depends(get_qwen_gateway),
@@ -811,7 +890,7 @@ def create_app(
 
 
 def get_qwen_gateway(request: Request) -> QwenGateway:
-    return QwenGateway(request.app.state.settings)
+    return request.app.state.qwen_gateway_factory()
 
 
 def get_request_settings(request: Request) -> Settings:
@@ -828,7 +907,7 @@ def get_memory(request: Request) -> MemoryRepository:
 
 def get_orchestrator(request: Request) -> Orchestrator:
     return Orchestrator(
-        gateway=QwenGateway(request.app.state.settings),
+        gateway=request.app.state.qwen_gateway_factory(),
         memory=request.app.state.memory,
         settings=request.app.state.settings,
     )

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import time
 from base64 import b64encode
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -16,6 +19,7 @@ from batchhelm_api.models import (
     ModelJSONRequest,
     ModelJSONResponse,
     ProviderStatus,
+    QwenVerificationReceipt,
 )
 
 logger = logging.getLogger("batchhelm.qwen")
@@ -23,6 +27,13 @@ logger = logging.getLogger("batchhelm.qwen")
 
 class QwenGatewayError(RuntimeError):
     """Raised when the Qwen provider returns an unusable response."""
+
+
+@dataclass(frozen=True)
+class _ProviderCall:
+    payload: dict[str, Any]
+    elapsed_ms: int
+    request_id: str | None
 
 
 class QwenGateway:
@@ -53,8 +64,8 @@ class QwenGateway:
             )
 
         payload = self._build_chat_payload(request)
-        data = await self._post(payload, label="text")
-        raw_text = self._extract_message_content(data)
+        call = await self._post(payload, label="text")
+        raw_text = self._extract_message_content(call.payload)
         return ModelJSONResponse(
             provider="qwen",
             model=self.settings.qwen_text_model,
@@ -75,8 +86,8 @@ class QwenGateway:
             )
 
         payload = self._build_image_payload(request)
-        data = await self._post(payload, label="vision")
-        raw_text = self._extract_message_content(data)
+        call = await self._post(payload, label="vision")
+        raw_text = self._extract_message_content(call.payload)
         return ModelJSONResponse(
             provider="qwen",
             model=self.settings.qwen_vision_model,
@@ -85,7 +96,46 @@ class QwenGateway:
             raw_text=raw_text,
         )
 
-    async def _post(self, payload: dict[str, Any], *, label: str) -> dict[str, Any]:
+    async def verify_live(self) -> QwenVerificationReceipt:
+        if not self.settings.qwen_configured:
+            raise QwenGatewayError("Qwen provider is not configured.")
+
+        payload = {
+            "model": self.settings.qwen_text_model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Return JSON only. Respond with exactly "
+                        '{"status":"verified","service":"batchhelm"}.'
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": "Verify Qwen Cloud connectivity for BatchHelm.",
+                },
+            ],
+            "temperature": 0,
+            "response_format": {"type": "json_object"},
+        }
+        call = await self._post(payload, label="verification")
+        raw_text = self._extract_message_content(call.payload)
+        content = _parse_json_object(raw_text)
+        if content != {"status": "verified", "service": "batchhelm"}:
+            raise QwenGatewayError(
+                "Qwen verification response did not match the proof contract."
+            )
+
+        return QwenVerificationReceipt(
+            model=self.settings.qwen_text_model,
+            base_url=str(self.settings.qwen_base_url),
+            provider_request_id=call.request_id,
+            latency_ms=call.elapsed_ms,
+            response_sha256=hashlib.sha256(raw_text.encode("utf-8")).hexdigest(),
+            verified_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        )
+
+    async def _post(self, payload: dict[str, Any], *, label: str) -> _ProviderCall:
         """POST to the provider with bounded retries and telemetry.
 
         Retries on transient transport errors and 5xx responses with
@@ -117,7 +167,27 @@ class QwenGateway:
                         "qwen_elapsed_ms": elapsed_ms,
                     },
                 )
-                return response.json()
+                try:
+                    data = response.json()
+                except json.JSONDecodeError as exc:
+                    raise QwenGatewayError(
+                        "Qwen provider response was not valid JSON."
+                    ) from exc
+                if not isinstance(data, dict):
+                    raise QwenGatewayError(
+                        "Qwen provider response must be a JSON object."
+                    )
+                request_id = data.get("id")
+                if not isinstance(request_id, str) or not request_id.strip():
+                    request_id = (
+                        response.headers.get("x-request-id")
+                        or response.headers.get("x-dashscope-request-id")
+                    )
+                return _ProviderCall(
+                    payload=data,
+                    elapsed_ms=elapsed_ms,
+                    request_id=request_id,
+                )
             except httpx.HTTPStatusError as exc:
                 last_error = exc
                 status = exc.response.status_code

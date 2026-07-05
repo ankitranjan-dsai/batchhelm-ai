@@ -1,8 +1,16 @@
+import json
+
+import httpx
 from fastapi.testclient import TestClient
 
 from batchhelm_api.app import create_app
 from batchhelm_api.config import Settings
 from batchhelm_api.memory_repository import InMemoryMemoryRepository
+from batchhelm_api.qwen import QwenGateway
+from batchhelm_api.qwen_verification_repository import (
+    InMemoryQwenVerificationRepository,
+    QwenVerificationStoreUnavailable,
+)
 
 
 def make_client() -> TestClient:
@@ -16,6 +24,54 @@ def make_client() -> TestClient:
     )
     return TestClient(
         create_app(settings=settings, memory_repository=InMemoryMemoryRepository())
+    )
+
+
+def make_qwen_proof_client(
+    *,
+    proof_token: str = "proof-token",
+) -> TestClient:
+    settings = Settings(
+        QWEN_API_KEY="test-key",
+        QWEN_BASE_URL="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        QWEN_TEXT_MODEL="qwen3.7-plus",
+        QWEN_VISION_MODEL="qwen3-vl-plus",
+        QWEN_PROOF_TOKEN=proof_token,
+        APP_ENV="test",
+        LOG_LEVEL="debug",
+    )
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl-api-proof",
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {"status": "verified", "service": "batchhelm"}
+                            )
+                        }
+                    }
+                ],
+            },
+        )
+
+    gateway = QwenGateway(
+        settings,
+        client_factory=lambda: httpx.AsyncClient(
+            base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            transport=httpx.MockTransport(handler),
+        ),
+    )
+    return TestClient(
+        create_app(
+            settings=settings,
+            memory_repository=InMemoryMemoryRepository(),
+            qwen_gateway_factory=lambda: gateway,
+            qwen_verification_repository=InMemoryQwenVerificationRepository(),
+        )
     )
 
 
@@ -71,6 +127,80 @@ def test_qwen_summary_uses_fallback_without_key() -> None:
     payload = response.json()
     assert payload["used_fallback"] is True
     assert "Spinach" in payload["content"]["summary"]
+
+
+def test_qwen_proof_returns_not_found_before_first_verification() -> None:
+    response = make_qwen_proof_client().get("/api/qwen/proof")
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "qwen_proof_not_found"
+
+
+def test_qwen_verify_is_disabled_without_a_proof_token() -> None:
+    response = make_qwen_proof_client(proof_token="").post(
+        "/api/qwen/verify",
+        headers={"X-BatchHelm-Proof-Token": "proof-token"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "qwen_proof_disabled"
+
+
+def test_qwen_verify_rejects_the_wrong_proof_token() -> None:
+    response = make_qwen_proof_client().post(
+        "/api/qwen/verify",
+        headers={"X-BatchHelm-Proof-Token": "wrong-token"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "qwen_proof_forbidden"
+
+
+def test_qwen_verify_persists_a_public_redacted_receipt() -> None:
+    client = make_qwen_proof_client()
+
+    verified = client.post(
+        "/api/qwen/verify",
+        headers={"X-BatchHelm-Proof-Token": "proof-token"},
+    )
+    public = client.get("/api/qwen/proof")
+
+    assert verified.status_code == 200
+    assert public.status_code == 200
+    assert public.json() == verified.json()
+    assert public.json()["verified"] is True
+    assert public.json()["model"] == "qwen3.7-plus"
+    assert public.json()["provider_request_id"] == "chatcmpl-api-proof"
+    serialized = public.text
+    assert "test-key" not in serialized
+    assert '"status":"verified"' not in serialized
+    assert "Verify Qwen Cloud" not in serialized
+
+
+def test_qwen_proof_reports_unavailable_storage() -> None:
+    class UnavailableProofRepository:
+        def initialize(self) -> None:
+            return None
+
+        def save(self, _receipt: object) -> None:
+            raise QwenVerificationStoreUnavailable("unavailable")
+
+        def latest(self) -> None:
+            raise QwenVerificationStoreUnavailable("unavailable")
+
+    settings = Settings(APP_ENV="test", LOG_LEVEL="debug")
+    client = TestClient(
+        create_app(
+            settings=settings,
+            memory_repository=InMemoryMemoryRepository(),
+            qwen_verification_repository=UnavailableProofRepository(),
+        )
+    )
+
+    response = client.get("/api/qwen/proof")
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "qwen_proof_store_unavailable"
 
 
 def test_customer_notice_endpoint_accepts_affected_item_override() -> None:

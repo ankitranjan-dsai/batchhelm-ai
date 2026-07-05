@@ -124,7 +124,7 @@ git push origin main
 - Modify: `services/api/src/batchhelm_api/qwen.py`
 - Modify: `services/api/tests/test_qwen_gateway.py`
 
-- [ ] **Step 1: Write the failing gateway probe tests**
+- [x] **Step 1: Write the failing gateway probe tests**
 
 Add tests that require `QwenGateway.verify_live()` to:
 
@@ -150,7 +150,7 @@ async def test_live_verification_requires_a_configured_key() -> None:
         await QwenGateway(make_settings()).verify_live()
 ```
 
-- [ ] **Step 2: Run the tests and verify the method is missing**
+- [x] **Step 2: Run the tests and verify the method is missing**
 
 Run:
 
@@ -163,7 +163,7 @@ cd services/api
 
 Expected: failure because `verify_live` does not exist.
 
-- [ ] **Step 3: Add the receipt model**
+- [x] **Step 3: Add the receipt model**
 
 Add `QwenVerificationReceipt` to `models.py`:
 
@@ -179,7 +179,7 @@ class QwenVerificationReceipt(BaseModel):
     verified_at: str
 ```
 
-- [ ] **Step 4: Implement the minimal live probe**
+- [x] **Step 4: Implement the minimal live probe**
 
 Add `verify_live()` to `QwenGateway`. It must:
 
@@ -191,7 +191,7 @@ Add `verify_live()` to `QwenGateway`. It must:
    and UTC timestamp;
 6. never include request headers, API keys, or response text in the receipt.
 
-- [ ] **Step 5: Run all gateway tests**
+- [x] **Step 5: Run all gateway tests**
 
 Run:
 
@@ -211,7 +211,7 @@ Expected: all gateway tests pass.
 - Modify: `services/api/src/batchhelm_api/app.py`
 - Modify: `services/api/tests/test_api.py`
 
-- [ ] **Step 1: Write failing SQLite repository tests**
+- [x] **Step 1: Write failing SQLite repository tests**
 
 Define the expected repository behavior:
 
@@ -233,7 +233,7 @@ def test_sqlite_repository_persists_latest_receipt(tmp_path: Path) -> None:
     assert latest.provider_request_id == "request-two"
 ```
 
-- [ ] **Step 2: Run the repository tests and verify the import fails**
+- [x] **Step 2: Run the repository tests and verify the import fails**
 
 Run:
 
@@ -244,7 +244,7 @@ cd services/api
 
 Expected: failure because the repository module does not exist.
 
-- [ ] **Step 3: Implement the repository**
+- [x] **Step 3: Implement the repository**
 
 Create:
 
@@ -262,7 +262,7 @@ class SQLiteQwenVerificationRepository:
 Use WAL mode, a busy timeout, explicit transactions, and newest-first ordering.
 Wrap `sqlite3.Error` as `QwenVerificationStoreUnavailable`.
 
-- [ ] **Step 4: Verify repository persistence**
+- [x] **Step 4: Verify repository persistence**
 
 Run:
 
@@ -273,7 +273,7 @@ cd services/api
 
 Expected: both repository tests pass.
 
-- [ ] **Step 5: Write failing API security and proof tests**
+- [x] **Step 5: Write failing API security and proof tests**
 
 Add API tests for:
 
@@ -284,7 +284,7 @@ Add API tests for:
   makes it available through `GET /api/qwen/proof`;
 - the public receipt contains no API key or prompt/response body.
 
-- [ ] **Step 6: Run the new API tests and verify endpoint failure**
+- [x] **Step 6: Run the new API tests and verify endpoint failure**
 
 Run:
 
@@ -295,7 +295,7 @@ cd services/api
 
 Expected: failure because the endpoints do not exist.
 
-- [ ] **Step 7: Add settings and endpoints**
+- [x] **Step 7: Add settings and endpoints**
 
 Add:
 
@@ -314,7 +314,7 @@ GET  /api/qwen/proof
 Use `secrets.compare_digest` for the token and increment a
 `qwen_verifications` telemetry counter only after a successful live call.
 
-- [ ] **Step 8: Run API and repository tests**
+- [x] **Step 8: Run API and repository tests**
 
 Run:
 
@@ -328,7 +328,7 @@ cd services/api
 
 Expected: all selected tests pass.
 
-- [ ] **Step 9: Commit and push live-Qwen proof**
+- [x] **Step 9: Commit and push live-Qwen proof**
 
 Run:
 

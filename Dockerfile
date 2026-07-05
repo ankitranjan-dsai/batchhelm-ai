@@ -12,6 +12,7 @@ ENV PYTHONUNBUFFERED=1 \
     MEMORY_PATH=/data/batchhelm-memory.db \
     ORCHESTRATION_DATABASE_PATH=/data/orchestration.db \
     INTAKE_DATABASE_PATH=/data/intake.db \
+    QWEN_PROOF_DATABASE_PATH=/data/qwen-proof.db \
     UPLOAD_DIR=/data/uploads
 
 WORKDIR /app

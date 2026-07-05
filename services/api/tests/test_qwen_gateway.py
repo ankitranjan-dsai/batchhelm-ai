@@ -96,6 +96,46 @@ async def test_gateway_rejects_non_json_provider_content() -> None:
 
 
 @pytest.mark.asyncio
+async def test_gateway_rejects_a_non_object_provider_response() -> None:
+    gateway = QwenGateway(
+        make_settings(api_key="test-key"),
+        client_factory=lambda: httpx.AsyncClient(
+            base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            transport=httpx.MockTransport(
+                lambda _request: httpx.Response(200, json=["unexpected"])
+            ),
+        ),
+    )
+
+    with pytest.raises(QwenGatewayError, match="JSON object"):
+        await gateway.complete_json(
+            ModelJSONRequest(system="Return JSON.", user="Analyze.")
+        )
+
+
+@pytest.mark.asyncio
+async def test_gateway_rejects_an_invalid_json_http_response() -> None:
+    gateway = QwenGateway(
+        make_settings(api_key="test-key"),
+        client_factory=lambda: httpx.AsyncClient(
+            base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            transport=httpx.MockTransport(
+                lambda _request: httpx.Response(
+                    200,
+                    content=b"not-json",
+                    headers={"Content-Type": "application/json"},
+                )
+            ),
+        ),
+    )
+
+    with pytest.raises(QwenGatewayError, match="valid JSON"):
+        await gateway.complete_json(
+            ModelJSONRequest(system="Return JSON.", user="Analyze.")
+        )
+
+
+@pytest.mark.asyncio
 async def test_vision_gateway_returns_fallback_when_key_is_missing() -> None:
     gateway = QwenGateway(make_settings())
 
@@ -159,3 +199,54 @@ async def test_vision_gateway_posts_image_url_content_part() -> None:
     assert "data:image/png;base64,YWJj" in payload
     assert response.used_fallback is False
     assert response.content["confidence"] == 96
+
+
+@pytest.mark.asyncio
+async def test_live_verification_returns_redacted_provider_receipt() -> None:
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["authorization"] = request.headers["Authorization"]
+        captured["payload"] = request.read().decode()
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl-batchhelm-proof",
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"status":"verified","service":"batchhelm"}'
+                            )
+                        }
+                    }
+                ],
+            },
+        )
+
+    gateway = QwenGateway(
+        make_settings(api_key="test-key"),
+        client_factory=lambda: httpx.AsyncClient(
+            base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            transport=httpx.MockTransport(handler),
+        ),
+    )
+
+    receipt = await gateway.verify_live()
+
+    assert captured["authorization"] == "Bearer test-key"
+    assert '"response_format":{"type":"json_object"}' in str(captured["payload"])
+    assert receipt.provider == "qwen-cloud"
+    assert receipt.verified is True
+    assert receipt.model == "qwen-plus"
+    assert receipt.provider_request_id == "chatcmpl-batchhelm-proof"
+    assert receipt.latency_ms >= 0
+    assert len(receipt.response_sha256) == 64
+    assert "test-key" not in receipt.model_dump_json()
+    assert "status" not in receipt.model_dump_json()
+
+
+@pytest.mark.asyncio
+async def test_live_verification_requires_a_configured_key() -> None:
+    with pytest.raises(QwenGatewayError, match="not configured"):
+        await QwenGateway(make_settings()).verify_live()

@@ -23,6 +23,11 @@ class Settings(BaseSettings):
         default=30.0, validation_alias="QWEN_TIMEOUT_SECONDS"
     )
     qwen_max_retries: int = Field(default=2, validation_alias="QWEN_MAX_RETRIES")
+    qwen_proof_token: str = Field(default="", validation_alias="QWEN_PROOF_TOKEN")
+    qwen_proof_database_path: Path = Field(
+        default=Path("./data/qwen-proof.db"),
+        validation_alias="QWEN_PROOF_DATABASE_PATH",
+    )
     app_env: str = Field(default="development", validation_alias="APP_ENV")
     log_level: str = Field(default="info", validation_alias="LOG_LEVEL")
     database_path: Path = Field(
