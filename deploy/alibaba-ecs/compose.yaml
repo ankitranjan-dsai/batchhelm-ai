@@ -39,7 +39,7 @@ services:
         - >-
           import urllib.request;
           raise SystemExit(0 if urllib.request.urlopen(
-          'http://localhost:8000/health', timeout=3).status == 200 else 1)
+          'http://127.0.0.1:8000/health', timeout=3).status == 200 else 1)
       interval: 15s
       timeout: 5s
       retries: 8
@@ -71,7 +71,7 @@ services:
     ports:
       - "80:80"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
       interval: 15s
       timeout: 5s
       retries: 8

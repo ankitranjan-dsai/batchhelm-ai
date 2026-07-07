@@ -51,7 +51,7 @@ chmod 0600 "${LOCAL_ENV}"
   printf 'QWEN_MAX_RETRIES=%s\n' "${QWEN_MAX_RETRIES:-2}"
   printf 'LOG_LEVEL=%s\n' "${LOG_LEVEL:-info}"
   printf 'RATE_LIMIT_PER_MINUTE=%s\n' "${RATE_LIMIT_PER_MINUTE:-120}"
-  printf 'REVIEWER_ROLE=%s\n' "${REVIEWER_ROLE:-Operations Manager}"
+  printf "REVIEWER_ROLE='%s'\n" "${REVIEWER_ROLE:-Operations Manager}"
 } >"${LOCAL_ENV}"
 
 SSH_OPTIONS=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new)
