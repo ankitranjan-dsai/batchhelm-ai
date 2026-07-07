@@ -12,9 +12,9 @@ the submission never treats configuration as proof of a successful call.
 | Redacted live-call receipt | Implemented and tested | `/api/qwen/verify`, `/api/qwen/proof` |
 | SQLite proof history | Implemented and tested | `qwen_verification_repository.py` |
 | ECS release automation | Implemented and tested | `deploy/alibaba-ecs/` |
-| Public Alibaba ECS URL | Pending external deployment | submission checklist |
-| Live provider receipt | Pending Qwen key and ECS run | submission checklist |
-| ECS Workbench screenshots | Pending external deployment | submission checklist |
+| Public Alibaba ECS URL | **Captured** — `http://47.84.199.208` | Section 4 |
+| Live provider receipt | **Captured** — `mode: "live"`, real `/api/qwen/proof` receipt | Section 4 |
+| ECS Workbench screenshots | Pending console screenshot | submission checklist |
 
 ## 1. Qwen Cloud API
 
@@ -86,21 +86,57 @@ private, and allows only one API replica.
 
 ## 4. Evidence Capture After Deployment
 
-After running `deploy.sh`, capture:
+Deployed on Alibaba Cloud ECS (Singapore region, `ecs.t6-c1m2.large`, Ubuntu
+22.04) via `deploy/alibaba-ecs/`. Public URL:
 
-1. the public dashboard with the browser address visible;
-2. `GET /health`;
-3. `GET /api/qwen/status` showing `mode: "live"` and current models;
-4. `GET /api/qwen/proof` showing the redacted successful receipt;
-5. Alibaba Cloud ECS Workbench or instance overview showing the running host;
-6. `docker compose ps` showing healthy `api` and `web` services.
+```text
+http://47.84.199.208
+```
 
-Add the public URL and screenshots to the README, final deck, and demo video
-only after these observations exist.
+The following was captured directly from an external machine hitting the
+public IP (not over SSH), on 2026-07-07.
+
+**`GET /health`**
+
+```json
+{"status":"ok","service":"batchhelm-api","version":"0.2.0"}
+```
+
+**`GET /api/qwen/status`**
+
+```json
+{"provider":"qwen","configured":true,"base_url":"https://dashscope-intl.aliyuncs.com/compatible-mode/v1","text_model":"qwen3.7-plus","vision_model":"qwen3-vl-plus","mode":"live"}
+```
+
+**`GET /api/qwen/proof`** — redacted receipt from a real, billable Qwen Cloud call:
+
+```json
+{"provider":"qwen-cloud","verified":true,"model":"qwen3.7-plus","base_url":"https://dashscope-intl.aliyuncs.com/compatible-mode/v1","provider_request_id":"chatcmpl-1781c58f-8bfe-9ef9-b872-f08cedd8ec47","latency_ms":7636,"response_sha256":"94425335f351d67ae67337877e0dd3d52da72ead8c1b64144c3555df64024deb","verified_at":"2026-07-07T23:09:16.918885Z"}
+```
+
+**`GET /api/inspections/demo`** — live Qwen vision call against the bundled
+sample photo (`sample-data/store-b-cooler-spinach.png`), not a fallback:
+
+```json
+{"extracted":{"product_name":"Spinach 10 oz","lot_code":"L2418","upc":"008500001010","confidence":100},"recall_match":true,"provider":"qwen","used_fallback":false}
+```
+
+**`docker compose ps`** on the ECS host — both services healthy:
+
+```text
+NAME              IMAGE                 SERVICE   STATUS
+batchhelm-api-1   batchhelm-api:local   api       Up (healthy)
+batchhelm-web-1   batchhelm-web:...     web       Up (healthy)
+```
+
+Still pending: an Alibaba Cloud console (ECS Workbench / instance overview)
+screenshot showing the running host, which requires an authenticated console
+session and is captured separately for the final deck.
 
 ## 5. What This Does Not Claim Yet
 
-Repository code proves that the deployment and verification paths exist. It
-does not by itself prove that an ECS instance is currently running or that a
-real Qwen request has succeeded. Those two claims remain pending until external
-runtime evidence is captured.
+Section 4 now provides external runtime evidence that the ECS instance is
+running and that real Qwen Cloud requests succeed. The one remaining gap is a
+console-level (ECS Workbench / instance overview) screenshot, which requires
+an authenticated Alibaba Cloud session and is not something this repository's
+automation can capture on its own.

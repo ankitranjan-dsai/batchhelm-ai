@@ -266,6 +266,11 @@ scripts/check-attribution.sh
 
 ## Deployment
 
+**Live on Alibaba Cloud ECS:** [http://47.84.199.208](http://47.84.199.208)
+— see [docs/alibaba-cloud-proof.md](docs/alibaba-cloud-proof.md) for the
+captured `/health`, `/api/qwen/status` (`mode: "live"`), and `/api/qwen/proof`
+evidence.
+
 BatchHelm ships with a root `Dockerfile` (API), `apps/web/Dockerfile`
 (dashboard), and `docker-compose.yml`:
 
@@ -290,13 +295,12 @@ bash deploy/alibaba-ecs/deploy.sh
 ```
 
 The script deploys the exact local commit, waits for health, performs one
-protected live Qwen call, and prints the public redacted proof receipt. A public
-URL is not claimed in this README until that external deployment has been
-captured.
+protected live Qwen call, and prints the public redacted proof receipt.
 
 ## Submission
 
 - Track: **Autopilot Agent** (primary), **Agent Society** (secondary)
+- Live deployment: [http://47.84.199.208](http://47.84.199.208)
 - Checklist: [docs/submission-checklist.md](docs/submission-checklist.md)
 - Demo script: [docs/demo-script.md](docs/demo-script.md)
 - Sample artifacts: [evidence packet](docs/sample-evidence-packet.md) ·

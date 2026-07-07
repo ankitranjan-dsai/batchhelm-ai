@@ -10,9 +10,10 @@ The repository contains the complete deployment bundle under
 
 ## Deployment Status
 
-The deployment automation is implemented and tested. A live ECS address and
-live Qwen proof are intentionally not claimed until the commands below run
-against an Alibaba Cloud account.
+Deployed and live: **[http://47.84.199.208](http://47.84.199.208)** (Alibaba
+Cloud ECS, Singapore region, `ecs.t6-c1m2.large`, Ubuntu 22.04). Captured
+`/health`, `/api/qwen/status` (`mode: "live"`), and `/api/qwen/proof` evidence
+is in [docs/alibaba-cloud-proof.md](alibaba-cloud-proof.md).
 
 ## Runtime Topology
 
