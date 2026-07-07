@@ -857,7 +857,7 @@ def create_app(
         return await inspection.inspect_image(
             gateway=gateway,
             upload=inspection.demo_upload_metadata(),
-            image_bytes=b"demo-image",
+            image_bytes=inspection.demo_shelf_image_bytes(),
             media_type="image/png",
             incident=build_demo_incident(),
             allow_seeded_fallback=True,

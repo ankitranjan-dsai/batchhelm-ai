@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from batchhelm_api.models import (
     ExtractedLabel,
     ModelImageJSONRequest,
@@ -12,6 +14,12 @@ from batchhelm_api.models import (
 )
 from batchhelm_api.qwen import QwenGateway
 
+# services/api/src/batchhelm_api/inspection.py -> repository root is four
+# parents up, mirrored inside the API container by copying sample-data/
+# alongside services/ (see Dockerfile).
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
+DEMO_SHELF_IMAGE_PATH = _REPOSITORY_ROOT / "sample-data" / "store-b-cooler-spinach.png"
+
 
 def demo_upload_metadata() -> UploadMetadata:
     return UploadMetadata(
@@ -19,9 +27,13 @@ def demo_upload_metadata() -> UploadMetadata:
         original_filename="store-b-cooler-spinach.png",
         stored_filename="demo-shelf-photo.png",
         media_type="image/png",
-        size_bytes=204800,
+        size_bytes=DEMO_SHELF_IMAGE_PATH.stat().st_size,
         path="sample-data/store-b-cooler-spinach.png",
     )
+
+
+def demo_shelf_image_bytes() -> bytes:
+    return DEMO_SHELF_IMAGE_PATH.read_bytes()
 
 
 def inspection_request(

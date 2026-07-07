@@ -20,6 +20,8 @@ WORKDIR /app
 # README is referenced by the API package metadata (pyproject readme path).
 COPY README.md ./README.md
 COPY services/api ./services/api
+# Bundled demo fixture used by GET /api/inspections/demo.
+COPY sample-data ./sample-data
 
 WORKDIR /app/services/api
 RUN uv sync --frozen --no-dev
