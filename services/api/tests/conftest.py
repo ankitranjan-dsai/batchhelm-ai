@@ -39,6 +39,24 @@ def fallback_gateway() -> QwenGateway:
     return QwenGateway(make_settings())
 
 
+def erroring_gateway(status_code: int = 400) -> QwenGateway:
+    """A 'live' gateway whose provider always fails with ``status_code``."""
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            status_code, json={"error": {"message": "invalid parameter"}}
+        )
+
+    transport = httpx.MockTransport(handler)
+    return QwenGateway(
+        make_settings(api_key="test-key"),
+        client_factory=lambda: httpx.AsyncClient(
+            base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            transport=transport,
+        ),
+    )
+
+
 def scripted_gateway(content: dict[str, object]) -> QwenGateway:
     """A 'live' gateway whose provider always returns ``content`` as JSON."""
 

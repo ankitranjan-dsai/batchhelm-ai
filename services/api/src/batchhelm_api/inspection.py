@@ -127,14 +127,21 @@ async def inspect_image(
     incident: RecallIncidentInput,
     allow_seeded_fallback: bool,
 ) -> ShelfInspectionResult:
-    response = await gateway.complete_image_json(
-        inspection_request(
-            image_bytes=image_bytes,
-            media_type=media_type,
-            incident=incident,
-            allow_seeded_fallback=allow_seeded_fallback,
-        )
+    request = inspection_request(
+        image_bytes=image_bytes,
+        media_type=media_type,
+        incident=incident,
+        allow_seeded_fallback=allow_seeded_fallback,
     )
+    try:
+        response = await gateway.complete_image_json(request)
+    except Exception:  # noqa: BLE001 - degrade gracefully, like qwen_tasks
+        response = ModelJSONResponse(
+            provider="qwen",
+            model=gateway.settings.qwen_vision_model,
+            used_fallback=True,
+            content=request.fallback,
+        )
     return inspection_from_model_content(upload=upload, model_response=response)
 
 

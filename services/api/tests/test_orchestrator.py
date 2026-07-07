@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+
+import httpx
+
 from batchhelm_api.agents import Orchestrator
 from batchhelm_api.agents.base import Agent, AgentContext, AgentOutput, EventRecorder
 from batchhelm_api.agents.inventory import INVENTORY_MATCHING, SHELF_VISION
@@ -12,8 +16,14 @@ from batchhelm_api.models import (
     OutputSource,
 )
 from batchhelm_api.orchestration_state import OrchestrationCheckpoint
+from batchhelm_api.qwen import QwenGateway
 from batchhelm_api.sample_data import build_demo_incident
-from tests.conftest import fallback_gateway, make_settings, scripted_gateway
+from tests.conftest import (
+    erroring_gateway,
+    fallback_gateway,
+    make_settings,
+    scripted_gateway,
+)
 
 
 def _orchestrator(gateway, **kwargs) -> Orchestrator:
@@ -79,6 +89,51 @@ async def test_real_shelf_fallback_names_artifact_without_inferring_match() -> N
     assert vision.reasoning == (
         "Qwen vision was unavailable; no image match was inferred."
     )
+
+
+async def test_full_run_degrades_but_completes_when_live_provider_errors() -> None:
+    # Every Qwen call (text and vision) fails with HTTP 400; no agent may
+    # fail or skip, and the task board must still be populated.
+    orchestrator = _orchestrator(erroring_gateway())
+
+    result = await orchestrator.run(build_demo_incident())
+
+    assert result.status == AgentRunStatus.completed
+    assert all(a.status == AgentRunStatus.completed for a in result.agents)
+    assert result.analysis.open_tasks > 0
+    assert result.analysis.tasks
+    vision = next(a for a in result.agents if a.agent == SHELF_VISION)
+    assert vision.used_fallback
+
+
+async def test_shelf_vision_sends_demo_photo_when_run_has_no_upload() -> None:
+    payloads: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payloads.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": json.dumps({"confidence": 90})}}]
+            },
+        )
+
+    gateway = QwenGateway(
+        make_settings(api_key="test-key"),
+        client_factory=lambda: httpx.AsyncClient(
+            base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            transport=httpx.MockTransport(handler),
+        ),
+    )
+    orchestrator = _orchestrator(gateway)
+
+    await orchestrator.run(build_demo_incident())
+
+    vision_calls = [p for p in payloads if p["model"] == "qwen-vl-plus"]
+    assert vision_calls
+    image_url = vision_calls[0]["messages"][1]["content"][1]["image_url"]["url"]
+    # A decodable PNG, not the old b"demo-image" placeholder.
+    assert image_url.startswith("data:image/png;base64,iVBOR")
 
 
 async def test_checkpoints_are_persisted_per_agent() -> None:

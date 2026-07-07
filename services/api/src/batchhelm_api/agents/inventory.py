@@ -81,8 +81,17 @@ class ShelfVisionAgent(Agent):
 
     async def run(self, ctx: AgentContext) -> AgentOutput:
         has_real_image = "shelf_image_bytes" in ctx.blackboard
-        image_bytes: bytes = ctx.blackboard.get("shelf_image_bytes", b"demo-image")
-        media_type: str = ctx.blackboard.get("shelf_image_media_type", "image/png")
+        if has_real_image:
+            image_bytes: bytes = ctx.blackboard["shelf_image_bytes"]
+            media_type: str = ctx.blackboard.get(
+                "shelf_image_media_type", "image/png"
+            )
+        else:
+            # No photo on this run: send the bundled demo photo so live Qwen
+            # vision still receives a decodable image (a placeholder byte
+            # string is rejected by the provider with HTTP 400).
+            image_bytes = inspection.demo_shelf_image_bytes()
+            media_type = "image/png"
         upload = ctx.blackboard.get("shelf_upload") or inspection.demo_upload_metadata()
 
         result = await inspection.inspect_image(
