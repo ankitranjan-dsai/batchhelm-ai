@@ -1,4 +1,5 @@
 import { demoIncident } from "./data/demoIncident";
+import { randomId } from "./randomId";
 import type {
   AgentActivity,
   EvidenceItem,
@@ -526,7 +527,7 @@ export async function submitReviewDecision(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      request_id: crypto.randomUUID(),
+      request_id: randomId(),
       reviewer: "Operations Manager",
       decision,
       note:

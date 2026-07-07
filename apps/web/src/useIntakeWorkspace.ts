@@ -11,6 +11,7 @@ import {
   intakeSessionReducer,
   type IntakeFiles,
 } from "./intakeSession";
+import { randomId } from "./randomId";
 
 export interface UseIntakeWorkspaceOptions {
   onRunAccepted?: (accepted: api.OrchestrationRunAccepted) => void;
@@ -310,7 +311,7 @@ function commandId(
   if (existing !== undefined) {
     return existing;
   }
-  const created = crypto.randomUUID();
+  const created = randomId();
   values[command] = created;
   return created;
 }

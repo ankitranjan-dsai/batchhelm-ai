@@ -10,6 +10,7 @@ import {
   initialOrchestrationSession,
   orchestrationSessionReducer,
 } from "./orchestrationSession";
+import { randomId } from "./randomId";
 
 export const ORCHESTRATION_SESSION_KEY = "batchhelm.orchestration.run";
 const ORCHESTRATION_REQUEST_KEY = "batchhelm.orchestration.request";
@@ -139,7 +140,7 @@ export function useOrchestrationRun() {
 function startRunOnce(): Promise<OrchestrationRunAccepted> {
   let requestId = sessionStorage.getItem(ORCHESTRATION_REQUEST_KEY);
   if (requestId === null) {
-    requestId = crypto.randomUUID();
+    requestId = randomId();
     sessionStorage.setItem(ORCHESTRATION_REQUEST_KEY, requestId);
   }
 
