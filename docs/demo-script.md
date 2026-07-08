@@ -6,7 +6,7 @@ track: **Agent Society**.
 ## Setup Before Recording
 
 1. Set `QWEN_API_KEY` and start the API and web application.
-2. Verify `/api/qwen/status` reports `mode: "live"` and `/api/qwen/proof`
+2. Verify `/api/v1/qwen/status` reports `mode: "live"` and `/api/v1/qwen/proof`
    contains a recent successful receipt.
 3. Open the dashboard Qwen Cloud evidence control and confirm it displays
    `Verified`, the current model, request ID, latency, and UTC timestamp.

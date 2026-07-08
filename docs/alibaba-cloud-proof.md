@@ -8,12 +8,12 @@ the submission never treats configuration as proof of a successful call.
 
 | Evidence | Status | Authoritative location |
 | --- | --- | --- |
-| Qwen Cloud API integration | Implemented and tested | `services/api/src/batchhelm_api/qwen.py` |
-| Redacted live-call receipt | Implemented and tested | `/api/qwen/verify`, `/api/qwen/proof` |
+| Qwen Cloud API integration | Implemented and tested | `services/api/v1/src/batchhelm_api/qwen.py` |
+| Redacted live-call receipt | Implemented and tested | `/api/v1/qwen/verify`, `/api/v1/qwen/proof` |
 | SQLite proof history | Implemented and tested | `qwen_verification_repository.py` |
 | ECS release automation | Implemented and tested | `deploy/alibaba-ecs/` |
 | Public Alibaba ECS URL | **Captured** — `http://47.84.199.208` | Section 4 |
-| Live provider receipt | **Captured** — `mode: "live"`, real `/api/qwen/proof` receipt | Section 4 |
+| Live provider receipt | **Captured** — `mode: "live"`, real `/api/v1/qwen/proof` receipt | Section 4 |
 | ECS Workbench screenshots | Pending console screenshot | submission checklist |
 
 ## 1. Qwen Cloud API
@@ -36,19 +36,19 @@ or source control.
 Code references:
 
 - gateway, retries, structured output, and verification:
-  `services/api/src/batchhelm_api/qwen.py`;
-- runtime configuration: `services/api/src/batchhelm_api/config.py`;
-- typed workflow tasks: `services/api/src/batchhelm_api/qwen_tasks.py`;
-- image inspection: `services/api/src/batchhelm_api/inspection.py`;
+  `services/api/v1/src/batchhelm_api/qwen.py`;
+- runtime configuration: `services/api/v1/src/batchhelm_api/config.py`;
+- typed workflow tasks: `services/api/v1/src/batchhelm_api/qwen_tasks.py`;
+- image inspection: `services/api/v1/src/batchhelm_api/inspection.py`;
 - public API and protected verification:
-  `services/api/src/batchhelm_api/app.py`.
+  `services/api/v1/src/batchhelm_api/app.py`.
 
 Official hackathon resources identify the same base URL and current models:
 `https://qwencloud-hackathon.devpost.com/resources`.
 
 ## 2. Live Verification Receipt
 
-`POST /api/qwen/verify` performs one real, billable, minimal structured Qwen
+`POST /api/v1/qwen/verify` performs one real, billable, minimal structured Qwen
 Cloud request. It requires the independent `X-BatchHelm-Proof-Token` header.
 The endpoint is disabled when `QWEN_PROOF_TOKEN` is unset.
 
@@ -66,7 +66,7 @@ After a successful response, BatchHelm persists only:
 It does not persist the Qwen key, proof token, request prompt, response body, or
 authorization headers.
 
-`GET /api/qwen/proof` exposes the latest redacted receipt without triggering
+`GET /api/v1/qwen/proof` exposes the latest redacted receipt without triggering
 another provider call. This is safe for judges to inspect and survives API
 restart through `/data/qwen-proof.db`.
 
@@ -102,19 +102,19 @@ public IP (not over SSH), on 2026-07-07.
 {"status":"ok","service":"batchhelm-api","version":"0.2.0"}
 ```
 
-**`GET /api/qwen/status`**
+**`GET /api/v1/qwen/status`**
 
 ```json
 {"provider":"qwen","configured":true,"base_url":"https://dashscope-intl.aliyuncs.com/compatible-mode/v1","text_model":"qwen3.7-plus","vision_model":"qwen3-vl-plus","mode":"live"}
 ```
 
-**`GET /api/qwen/proof`** — redacted receipt from a real, billable Qwen Cloud call:
+**`GET /api/v1/qwen/proof`** — redacted receipt from a real, billable Qwen Cloud call:
 
 ```json
 {"provider":"qwen-cloud","verified":true,"model":"qwen3.7-plus","base_url":"https://dashscope-intl.aliyuncs.com/compatible-mode/v1","provider_request_id":"chatcmpl-1781c58f-8bfe-9ef9-b872-f08cedd8ec47","latency_ms":7636,"response_sha256":"94425335f351d67ae67337877e0dd3d52da72ead8c1b64144c3555df64024deb","verified_at":"2026-07-07T23:09:16.918885Z"}
 ```
 
-**`GET /api/inspections/demo`** — live Qwen vision call against the bundled
+**`GET /api/v1/inspections/demo`** — live Qwen vision call against the bundled
 sample photo (`sample-data/store-b-cooler-spinach.png`), not a fallback:
 
 ```json

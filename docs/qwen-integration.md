@@ -1,7 +1,7 @@
 # Qwen Cloud Integration
 
 BatchHelm uses Qwen Cloud through its OpenAI-compatible chat API. The
-integration is isolated in `services/api/src/batchhelm_api/qwen.py` so the rest
+integration is isolated in `services/api/v1/src/batchhelm_api/qwen.py` so the rest
 of the product can use typed workflow outputs without depending on
 provider-specific request details.
 
@@ -50,9 +50,9 @@ The billable verification endpoint is separate from normal status:
 ```bash
 curl -fsS -X POST \
   -H "X-BatchHelm-Proof-Token: $QWEN_PROOF_TOKEN" \
-  http://localhost:8000/api/qwen/verify
+  http://localhost:8000/api/v1/qwen/verify
 
-curl -fsS http://localhost:8000/api/qwen/proof
+curl -fsS http://localhost:8000/api/v1/qwen/proof
 ```
 
 The first call uses Qwen Cloud and stores a redacted receipt. The second reads
@@ -95,22 +95,22 @@ positive match.
 
 ## Provider Surface (API)
 
-- `GET /api/qwen/status` — provider mode + configured models
-- `POST /api/qwen/verify` — protected real-call verification + persisted receipt
-- `GET /api/qwen/proof` — latest public redacted verification receipt
-- `POST /api/intakes` — stores a real packet and starts typed extraction
-- `GET /api/intakes/{intake_id}` — returns extraction status and provenance
-- `PATCH /api/intakes/{intake_id}/draft` — saves reviewer evidence
-- `POST /api/intakes/{intake_id}/confirm` — freezes the incident snapshot
-- `POST /api/intakes/{intake_id}/runs` — starts the snapshot's durable run
-- `POST /api/incidents/demo/runs` — idempotently starts one durable Qwen-driven run
-- `GET /api/orchestration/runs/{run_id}` — persisted run status and result
-- `GET /api/orchestration/runs/{run_id}/events` — ordered replay plus live SSE
-- `POST /api/incidents/demo/run` — synchronous compatibility run
-- `GET /api/incidents/demo/run/stream` — deprecated compatibility stream
-- `POST /api/briefing/demo` — management briefing
-- `GET /api/inspections/demo`, `POST /api/inspections/shelf-photo` — vision
-- `POST /api/qwen/recall-summary` — single-shot structured summary
+- `GET /api/v1/qwen/status` — provider mode + configured models
+- `POST /api/v1/qwen/verify` — protected real-call verification + persisted receipt
+- `GET /api/v1/qwen/proof` — latest public redacted verification receipt
+- `POST /api/v1/intakes` — stores a real packet and starts typed extraction
+- `GET /api/v1/intakes/{intake_id}` — returns extraction status and provenance
+- `PATCH /api/v1/intakes/{intake_id}/draft` — saves reviewer evidence
+- `POST /api/v1/intakes/{intake_id}/confirm` — freezes the incident snapshot
+- `POST /api/v1/intakes/{intake_id}/runs` — starts the snapshot's durable run
+- `POST /api/v1/incidents/demo/runs` — idempotently starts one durable Qwen-driven run
+- `GET /api/v1/orchestration/runs/{run_id}` — persisted run status and result
+- `GET /api/v1/orchestration/runs/{run_id}/events` — ordered replay plus live SSE
+- `POST /api/v1/incidents/demo/run` — synchronous compatibility run
+- `GET /api/v1/incidents/demo/run/stream` — deprecated compatibility stream
+- `POST /api/v1/briefing/demo` — management briefing
+- `GET /api/v1/inspections/demo`, `POST /api/v1/inspections/shelf-photo` — vision
+- `POST /api/v1/qwen/recall-summary` — single-shot structured summary
 
 The gateway sends chat-completion payloads with:
 
@@ -153,6 +153,6 @@ uv run uvicorn batchhelm_api.app:app --reload
 Then open:
 
 - `http://localhost:8000/health`
-- `http://localhost:8000/api/qwen/status`
-- `http://localhost:8000/api/inspections/demo`
+- `http://localhost:8000/api/v1/qwen/status`
+- `http://localhost:8000/api/v1/inspections/demo`
 - `http://localhost:8000/docs`

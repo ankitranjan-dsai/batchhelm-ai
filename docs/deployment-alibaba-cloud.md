@@ -12,7 +12,7 @@ The repository contains the complete deployment bundle under
 
 Deployed and live: **[http://47.84.199.208](http://47.84.199.208)** (Alibaba
 Cloud ECS, Singapore region, `ecs.t6-c1m2.large`, Ubuntu 22.04). Captured
-`/health`, `/api/qwen/status` (`mode: "live"`), and `/api/qwen/proof` evidence
+`/health`, `/api/v1/qwen/status` (`mode: "live"`), and `/api/v1/qwen/proof` evidence
 is in [docs/alibaba-cloud-proof.md](alibaba-cloud-proof.md).
 
 ## Runtime Topology
@@ -115,8 +115,8 @@ independently:
 
 ```bash
 curl -fsS http://ecs-address/health | jq .
-curl -fsS http://ecs-address/api/qwen/status | jq .
-curl -fsS http://ecs-address/api/qwen/proof | jq .
+curl -fsS http://ecs-address/api/v1/qwen/status | jq .
+curl -fsS http://ecs-address/api/v1/qwen/proof | jq .
 ```
 
 Expected health:
@@ -125,8 +125,8 @@ Expected health:
 {"status":"ok","service":"batchhelm-api","version":"0.2.0"}
 ```
 
-`/api/qwen/status` reports configuration and model selection. It does not prove
-that a network call succeeded. `/api/qwen/proof` returns the latest persisted
+`/api/v1/qwen/status` reports configuration and model selection. It does not prove
+that a network call succeeded. `/api/v1/qwen/proof` returns the latest persisted
 successful provider receipt and is the stronger evidence.
 
 ## 5. Back Up The Recovery Unit

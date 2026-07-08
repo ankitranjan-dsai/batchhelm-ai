@@ -116,12 +116,12 @@ set +a
 
 curl -fsS -X POST \
   -H "X-BatchHelm-Proof-Token: ${QWEN_PROOF_TOKEN}" \
-  http://127.0.0.1/api/qwen/verify |
+  http://127.0.0.1/api/v1/qwen/verify |
   jq .
 REMOTE_DEPLOY
 
 echo "Public health check:"
 curl -fsS "${PUBLIC_ORIGIN}/health" | jq .
 echo "Public redacted Qwen proof:"
-curl -fsS "${PUBLIC_ORIGIN}/api/qwen/proof" | jq .
+curl -fsS "${PUBLIC_ORIGIN}/api/v1/qwen/proof" | jq .
 echo "BatchHelm deployed at ${PUBLIC_ORIGIN}"

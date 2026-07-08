@@ -21,8 +21,8 @@ Submission deadline: **July 9, 2026 at 2:00 PM Pacific Time**.
 - [x] **Verify real ambiguous intake in desktop and mobile browsers** and capture populated review evidence
 - [x] **Deploy the backend on Alibaba Cloud** and capture verifiable service evidence (`docs/alibaba-cloud-proof.md`)
 - [x] **Publish a working test URL** that remains available throughout judging — `http://47.84.199.208`
-- [x] **Verify live Qwen mode** in the deployed app and capture model/source evidence (`mode: "live"`, real `/api/qwen/proof` receipt)
-- [x] **Measure Agent Society efficiency** against a single-agent baseline (`docs/benchmarks/agent-society-vs-single-agent.md`, reproducible via `services/api/scripts/benchmark_agent_society.py`)
+- [x] **Verify live Qwen mode** in the deployed app and capture model/source evidence (`mode: "live"`, real `/api/v1/qwen/proof` receipt)
+- [x] **Measure Agent Society efficiency** against a single-agent baseline (`docs/benchmarks/agent-society-vs-single-agent.md`, reproducible via `services/api/v1/scripts/benchmark_agent_society.py`)
 - [x] Final proof-first presentation deck with real intake screenshots (`docs/presentation/batchhelm-ai-hackathon-deck.pptx`)
 - [ ] **Update the final deck with the deployed URL and captured live-Qwen proof**
 - [ ] **Demo video under 3 minutes** uploaded to YouTube/Vimeo/Youku — *record using the demo script; add the link here and in the README*

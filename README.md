@@ -55,7 +55,7 @@ request UUID starts exactly one orchestration run for that snapshot, and the
 dashboard adopts its run ID, status URL, and replayable event stream.
 
 The dashboard subscribes to
-`GET /api/orchestration/runs/{run_id}/events`, which replays persisted events
+`GET /api/v1/orchestration/runs/{run_id}/events`, which replays persisted events
 before following live Server-Sent Events. Refreshing or reconnecting resumes
 the same intake and run rather than launching another. Every output is tagged
 with its source - `qwen`, `deterministic`, `memory`, or `reviewer` - so model
@@ -162,33 +162,33 @@ Important endpoints:
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/health` | Service health check |
-| `POST` | `/api/intakes` | Idempotently stores a multipart packet and starts extraction |
-| `GET` | `/api/intakes/{intake_id}` | Returns durable extraction, evidence, draft, and status |
-| `PATCH` | `/api/intakes/{intake_id}/draft` | Saves a version-checked reviewer correction |
-| `POST` | `/api/intakes/{intake_id}/confirm` | Compiles an immutable confirmed incident snapshot |
-| `POST` | `/api/intakes/{intake_id}/runs` | Idempotently launches the confirmed incident |
-| `GET` | `/api/incidents/demo` | Returns the demo recall input |
-| `POST` | `/api/incidents/demo/analyze` | Deterministic baseline analysis |
-| `POST` | `/api/incidents/demo/runs` | Idempotently starts one durable orchestration run |
-| `GET` | `/api/orchestration/runs/{run_id}` | Returns persisted run status and terminal result |
-| `GET` | `/api/orchestration/runs/{run_id}/events` | Replays ordered events, then follows the live SSE stream |
-| `POST` | `/api/incidents/demo/run` | Synchronous compatibility endpoint for a full run |
-| `GET` | `/api/incidents/demo/run/stream` | Deprecated compatibility SSE endpoint |
-| `GET` | `/api/agents` | Lists the agent society and dependencies |
-| `GET` | `/api/memory` | Returns persisted memory records |
-| `POST` | `/api/briefing/demo` | Generates the management briefing |
-| `GET` | `/api/telemetry` | In-process telemetry counters |
-| `GET` | `/api/inspections/demo` | Returns a demo shelf inspection result |
-| `POST` | `/api/inspections/shelf-photo` | Inspects an uploaded shelf photo |
-| `GET` | `/api/evidence/demo-packet` | Returns a structured Markdown evidence packet preview |
-| `GET` | `/api/evidence/demo-packet.md` | Downloads the same packet as an audit-ready Markdown attachment |
-| `GET` | `/api/evidence/demo-review` | Returns packet readiness, blockers, release checks, and audit history |
-| `POST` | `/api/evidence/demo-review/decision` | Persists an idempotent reviewer decision and returns the complete audit history |
-| `GET` | `/api/qwen/status` | Reports Qwen gateway mode and configured models |
-| `POST` | `/api/qwen/verify` | Performs a token-protected live Qwen verification and stores a redacted receipt |
-| `GET` | `/api/qwen/proof` | Returns the latest persisted redacted Qwen receipt without another model call |
-| `POST` | `/api/qwen/recall-summary` | Generates a structured recall summary |
-| `POST` | `/api/notices/customer-draft` | Generates a customer notice draft |
+| `POST` | `/api/v1/intakes` | Idempotently stores a multipart packet and starts extraction |
+| `GET` | `/api/v1/intakes/{intake_id}` | Returns durable extraction, evidence, draft, and status |
+| `PATCH` | `/api/v1/intakes/{intake_id}/draft` | Saves a version-checked reviewer correction |
+| `POST` | `/api/v1/intakes/{intake_id}/confirm` | Compiles an immutable confirmed incident snapshot |
+| `POST` | `/api/v1/intakes/{intake_id}/runs` | Idempotently launches the confirmed incident |
+| `GET` | `/api/v1/incidents/demo` | Returns the demo recall input |
+| `POST` | `/api/v1/incidents/demo/analyze` | Deterministic baseline analysis |
+| `POST` | `/api/v1/incidents/demo/runs` | Idempotently starts one durable orchestration run |
+| `GET` | `/api/v1/orchestration/runs/{run_id}` | Returns persisted run status and terminal result |
+| `GET` | `/api/v1/orchestration/runs/{run_id}/events` | Replays ordered events, then follows the live SSE stream |
+| `POST` | `/api/v1/incidents/demo/run` | Synchronous compatibility endpoint for a full run |
+| `GET` | `/api/v1/incidents/demo/run/stream` | Deprecated compatibility SSE endpoint |
+| `GET` | `/api/v1/agents` | Lists the agent society and dependencies |
+| `GET` | `/api/v1/memory` | Returns persisted memory records |
+| `POST` | `/api/v1/briefing/demo` | Generates the management briefing |
+| `GET` | `/api/v1/telemetry` | In-process telemetry counters |
+| `GET` | `/api/v1/inspections/demo` | Returns a demo shelf inspection result |
+| `POST` | `/api/v1/inspections/shelf-photo` | Inspects an uploaded shelf photo |
+| `GET` | `/api/v1/evidence/demo-packet` | Returns a structured Markdown evidence packet preview |
+| `GET` | `/api/v1/evidence/demo-packet.md` | Downloads the same packet as an audit-ready Markdown attachment |
+| `GET` | `/api/v1/evidence/demo-review` | Returns packet readiness, blockers, release checks, and audit history |
+| `POST` | `/api/v1/evidence/demo-review/decision` | Persists an idempotent reviewer decision and returns the complete audit history |
+| `GET` | `/api/v1/qwen/status` | Reports Qwen gateway mode and configured models |
+| `POST` | `/api/v1/qwen/verify` | Performs a token-protected live Qwen verification and stores a redacted receipt |
+| `GET` | `/api/v1/qwen/proof` | Returns the latest persisted redacted Qwen receipt without another model call |
+| `POST` | `/api/v1/qwen/recall-summary` | Generates a structured recall summary |
+| `POST` | `/api/v1/notices/customer-draft` | Generates a customer notice draft |
 
 ### Durable Review Storage
 
@@ -268,7 +268,7 @@ scripts/check-attribution.sh
 
 **Live on Alibaba Cloud ECS:** [http://47.84.199.208](http://47.84.199.208)
 — see [docs/alibaba-cloud-proof.md](docs/alibaba-cloud-proof.md) for the
-captured `/health`, `/api/qwen/status` (`mode: "live"`), and `/api/qwen/proof`
+captured `/health`, `/api/v1/qwen/status` (`mode: "live"`), and `/api/v1/qwen/proof`
 evidence.
 
 BatchHelm ships with a root `Dockerfile` (API), `apps/web/Dockerfile`
