@@ -87,8 +87,18 @@ export function AgentsPage({ session, onRerun }: AgentsPageProps) {
         {waves.map((waveAgents, waveIndex) => (
           <div
             key={waveIndex}
+            role="button"
+            tabIndex={0}
+            aria-pressed={selectedWave === waveIndex}
+            aria-label={`Wave ${waveIndex + 1}: ${waveAgents.join(", ")}`}
             className={`wave-column ${selectedWave === waveIndex ? "selected" : ""}`}
             onClick={() => setSelectedWave(selectedWave === waveIndex ? null : waveIndex)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setSelectedWave(selectedWave === waveIndex ? null : waveIndex);
+              }
+            }}
           >
             <h3 className="wave-title">Wave {waveIndex + 1}</h3>
             <div className="wave-agents">
@@ -138,16 +148,75 @@ export function AgentsPage({ session, onRerun }: AgentsPageProps) {
         </div>
       </section>
 
-      {/* Recall Intake Agent Status */}
-      <section className="panel agent-detail-panel" aria-labelledby="intake-agent-title">
-        <div className="panel-header">
-          <h2 id="intake-agent-title">Recall Intake Agent</h2>
-          <span className="state-pill waiting">Pending</span>
-        </div>
-        <p className="empty-note">
-          <Clock size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: 6 }} />
-          Waiting for this execution stage.
-        </p>
+      {/* Wave / Agent Detail */}
+      <section className="panel agent-detail-panel" aria-labelledby="wave-detail-title" aria-live="polite">
+        {selectedWave === null ? (
+          <>
+            <div className="panel-header">
+              <h2 id="wave-detail-title">Wave Details</h2>
+            </div>
+            <p className="empty-note">
+              <Clock size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: 6 }} />
+              Select a wave above to inspect its agents, results, and events.
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="panel-header">
+              <h2 id="wave-detail-title">Wave {selectedWave + 1} Details</h2>
+              <span className="count-badge">
+                {waves[selectedWave].length} agent{waves[selectedWave].length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <div className="wave-detail-list">
+              {waves[selectedWave].map((agentName) => {
+                const agentResult = session.result?.agents.find((a) => a.agent === agentName);
+                const agentEvents = session.events.filter((e) => e.agent === agentName).slice(-4);
+                const status = agentResult?.status ?? "pending";
+                return (
+                  <article className="wave-detail-card" key={agentName}>
+                    <div className="wave-detail-heading">
+                      <span className="agent-card-icon" aria-hidden="true">
+                        {agentIcons[agentName] || <Activity size={18} />}
+                      </span>
+                      <strong>{agentName}</strong>
+                      <span className={`state-pill ${status === "completed" ? "" : status}`}>
+                        {status}
+                      </span>
+                    </div>
+                    {agentResult ? (
+                      <>
+                        <p className="wave-detail-summary">{agentResult.summary}</p>
+                        <small className="wave-detail-meta">
+                          {agentResult.attempts} attempt{agentResult.attempts === 1 ? "" : "s"}
+                          {" · "}
+                          {agentResult.duration_ms} ms
+                          {agentResult.depends_on.length > 0
+                            ? ` · after ${agentResult.depends_on.join(", ")}`
+                            : ""}
+                        </small>
+                      </>
+                    ) : (
+                      <p className="wave-detail-summary muted">
+                        Waiting for this execution stage.
+                      </p>
+                    )}
+                    {agentEvents.length > 0 ? (
+                      <div className="wave-detail-events">
+                        {agentEvents.map((event) => (
+                          <div className="wave-detail-event" key={event.id}>
+                            <span className="event-type">{event.type}</span>
+                            <span>{event.message}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+          </>
+        )}
       </section>
     </div>
   );

@@ -109,7 +109,7 @@ export function EvidenceReviewGate({
           onClick={() => onDecision("needs-changes")}
         >
           <MessageSquareWarning size={16} />
-          Request changes
+          {review.status === "needs-changes" ? "Changes requested" : "Request changes"}
         </button>
         <button
           type="button"
@@ -118,8 +118,19 @@ export function EvidenceReviewGate({
           onClick={() => onDecision("approved")}
         >
           <CheckCircle2 size={16} />
-          {isSubmitting ? "Applying decision" : "Approve packet"}
+          {isSubmitting ? "Applying decision" : review.status === "approved" ? "Packet approved" : "Approve packet"}
         </button>
+        {review.status === "approved" ? (
+          <p className="review-decision-note approved" role="status">
+            <CheckCircle2 size={14} aria-hidden="true" />
+            Decision recorded: packet approved and ready for supplier submission.
+          </p>
+        ) : review.status === "needs-changes" ? (
+          <p className="review-decision-note needs-changes" role="status">
+            <MessageSquareWarning size={14} aria-hidden="true" />
+            Decision recorded: changes requested. Resolve the open blockers above, then approve the packet.
+          </p>
+        ) : null}
       </div>
     </section>
   );
