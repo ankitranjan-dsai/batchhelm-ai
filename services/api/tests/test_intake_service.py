@@ -12,22 +12,18 @@ from batchhelm_api.intake_models import (
     IntakeArtifactRole,
     IntakeConfirmRequest,
     IntakeDraftUpdate,
-    IntakeStatus,
-)
+    IntakeStatus)
 from batchhelm_api.intake_repository import (
     IntakeStoreUnavailable,
-    SQLiteIntakeRepository,
-)
+    SQLiteIntakeRepository)
 from batchhelm_api.intake_service import (
     CreateIntakeCommand,
     IntakeService,
     IntakeUpload,
-    IntakeValidationFailed,
-)
+    IntakeValidationFailed)
 from batchhelm_api.intake_storage import (
     finalize_staged_packet,
-    stage_intake_packet,
-)
+    stage_intake_packet)
 from batchhelm_api.models import ModelImageJSONRequest, ModelJSONResponse
 from batchhelm_api.qwen import QwenGateway
 from tests.conftest import fallback_gateway, make_settings
@@ -56,13 +52,11 @@ def service(
     tmp_path: Path,
     *,
     intake_repository: SQLiteIntakeRepository | None = None,
-    gateway_factory: Callable[[], QwenGateway] = fallback_gateway,
-) -> IntakeService:
+    gateway_factory: Callable[[], QwenGateway] = fallback_gateway) -> IntakeService:
     return IntakeService(
         repository=intake_repository or repository(tmp_path / "intake.db"),
         artifact_root=tmp_path / "uploads",
-        gateway_factory=gateway_factory,
-    )
+        gateway_factory=gateway_factory)
 
 
 def create_command(
@@ -70,30 +64,25 @@ def create_command(
     *,
     inventory: bytes = CSV,
     notice: bytes = NOTICE,
-    shelf: bool = False,
-) -> CreateIntakeCommand:
+    shelf: bool = False) -> CreateIntakeCommand:
     return CreateIntakeCommand(
         request_id=request_id,
         notice=IntakeUpload(
             filename="notice.txt",
             media_type="text/plain",
-            stream=BytesIO(notice),
-        ),
+            stream=BytesIO(notice)),
         inventory=IntakeUpload(
             filename="inventory.csv",
             media_type="text/csv",
-            stream=BytesIO(inventory),
-        ),
+            stream=BytesIO(inventory)),
         shelf_photo=(
             IntakeUpload(
                 filename="shelf.png",
                 media_type="image/png",
-                stream=BytesIO(PNG),
-            )
+                stream=BytesIO(PNG))
             if shelf
             else None
-        ),
-    )
+        ))
 
 
 class CapturingGateway(QwenGateway):
@@ -103,15 +92,13 @@ class CapturingGateway(QwenGateway):
 
     async def complete_image_json(
         self,
-        request: ModelImageJSONRequest,
-    ) -> ModelJSONResponse:
+        request: ModelImageJSONRequest) -> ModelJSONResponse:
         self.image_prompt = request.user
         return await super().complete_image_json(request)
 
 
 async def test_duplicate_create_starts_one_extraction_worker(
-    tmp_path: Path,
-) -> None:
+    tmp_path: Path) -> None:
     intake_service = service(tmp_path)
 
     first = await intake_service.create(create_command("request-1"))
@@ -136,23 +123,18 @@ async def test_restart_recovers_extracting_intake(tmp_path: Path) -> None:
             IntakeArtifactRole.recall_notice: (
                 "notice.txt",
                 "text/plain",
-                BytesIO(NOTICE),
-            ),
+                BytesIO(NOTICE)),
             IntakeArtifactRole.inventory_csv: (
                 "inventory.csv",
                 "text/csv",
-                BytesIO(CSV),
-            ),
-        },
-    )
+                BytesIO(CSV))})
     finalize_staged_packet(packet)
     intake_repository.create_intake(
         intake_id=packet.intake_id,
         request_id="request-1",
         packet_fingerprint=packet.packet_fingerprint,
         provider_mode="demo-fallback",
-        artifacts=list(packet.artifacts),
-    )
+        artifacts=list(packet.artifacts))
     intake_repository.claim_extraction(packet.intake_id)
 
     restarted = service(tmp_path, intake_repository=intake_repository)
@@ -163,8 +145,7 @@ async def test_restart_recovers_extracting_intake(tmp_path: Path) -> None:
 
 
 async def test_confirmed_intake_resolves_real_shelf_artifact(
-    tmp_path: Path,
-) -> None:
+    tmp_path: Path) -> None:
     intake_service = service(tmp_path)
     accepted = await intake_service.create(
         create_command("request-1", shelf=True)
@@ -176,9 +157,7 @@ async def test_confirmed_intake_resolves_real_shelf_artifact(
         accepted.intake_id,
         IntakeConfirmRequest(
             request_id=uuid4(),
-            expected_version=review.version,
-        ),
-    )
+            expected_version=review.version))
     resolved = intake_service.resolve_run_input(ready.incident_id or "")
 
     assert resolved is not None
@@ -189,8 +168,7 @@ async def test_confirmed_intake_resolves_real_shelf_artifact(
 
 
 async def test_reviewer_update_supersedes_extracted_evidence(
-    tmp_path: Path,
-) -> None:
+    tmp_path: Path) -> None:
     intake_service = service(tmp_path)
     accepted = await intake_service.create(create_command("request-1"))
     await intake_service.wait_for_extraction(accepted.intake_id)
@@ -211,9 +189,7 @@ async def test_reviewer_update_supersedes_extracted_evidence(
             request_id=uuid4(),
             expected_version=review.version,
             criteria=criteria,
-            inventory=review.draft.inventory,
-        ),
-    )
+            inventory=review.draft.inventory))
 
     reviewer = updated.evidence[-1]
     assert updated.version == review.version + 1
@@ -236,8 +212,7 @@ async def test_artifact_path_cannot_escape_upload_root(tmp_path: Path) -> None:
             size_bytes=len(NOTICE),
             sha256="a" * 64,
             relative_path="../../secret",
-            created_at="2026-07-04T08:00:00+00:00",
-        ),
+            created_at="2026-07-04T08:00:00+00:00"),
         IntakeArtifact(
             id="inventory",
             intake_id=intake_id,
@@ -248,16 +223,14 @@ async def test_artifact_path_cannot_escape_upload_root(tmp_path: Path) -> None:
             size_bytes=len(CSV),
             sha256="b" * 64,
             relative_path=f"intakes/{intake_id}/inventory.csv",
-            created_at="2026-07-04T08:00:00+00:00",
-        ),
+            created_at="2026-07-04T08:00:00+00:00"),
     ]
     intake_repository.create_intake(
         intake_id=intake_id,
         request_id="request-1",
         packet_fingerprint="a" * 64,
         provider_mode="demo-fallback",
-        artifacts=packet_artifacts,
-    )
+        artifacts=packet_artifacts)
     restarted = service(tmp_path, intake_repository=intake_repository)
 
     await restarted.recover()
@@ -283,31 +256,25 @@ async def test_confirmation_rejects_incomplete_review(tmp_path: Path) -> None:
             request_id=uuid4(),
             expected_version=review.version,
             criteria=incomplete,
-            inventory=review.draft.inventory,
-        ),
-    )
+            inventory=review.draft.inventory))
 
     with pytest.raises(IntakeValidationFailed, match="lot or UPC"):
         intake_service.confirm(
             accepted.intake_id,
             IntakeConfirmRequest(
                 request_id=uuid4(),
-                expected_version=updated.version,
-            ),
-        )
+                expected_version=updated.version))
 
 
 async def test_incomplete_intake_never_seeds_demo_criteria_into_vision(
-    tmp_path: Path,
-) -> None:
+    tmp_path: Path) -> None:
     gateway = CapturingGateway()
     intake_service = service(tmp_path, gateway_factory=lambda: gateway)
     accepted = await intake_service.create(
         create_command(
             "request-1",
             notice=b"Recall notice without identifiers",
-            shelf=True,
-        )
+            shelf=True)
     )
 
     await intake_service.wait_for_extraction(accepted.intake_id)
@@ -319,8 +286,7 @@ async def test_incomplete_intake_never_seeds_demo_criteria_into_vision(
 
 async def test_repository_failure_discards_staged_packet(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    monkeypatch: pytest.MonkeyPatch) -> None:
     intake_repository = repository(tmp_path / "intake.db")
     intake_service = service(tmp_path, intake_repository=intake_repository)
 
@@ -330,8 +296,7 @@ async def test_repository_failure_discards_staged_packet(
     monkeypatch.setattr(
         intake_repository,
         "get_by_request",
-        unavailable,
-    )
+        unavailable)
 
     with pytest.raises(IntakeStoreUnavailable):
         await intake_service.create(create_command("request-1"))

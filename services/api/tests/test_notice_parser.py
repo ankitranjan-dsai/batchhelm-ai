@@ -46,8 +46,7 @@ def empty_pdf() -> bytes:
 def test_extracts_text_and_page_locator_from_pdf() -> None:
     parsed = parse_notice(
         media_type="application/pdf",
-        content=text_pdf("Spinach lot L2418 UPC 008500001010"),
-    )
+        content=text_pdf("Spinach lot L2418 UPC 008500001010"))
 
     assert "Spinach lot L2418" in parsed.normalized_text
     assert parsed.page_count == 1
@@ -65,8 +64,7 @@ def test_treats_image_only_pdf_as_scanned(tmp_path: Path) -> None:
 
     parsed = parse_notice(
         media_type="application/pdf",
-        content=pdf.getvalue(),
-    )
+        content=pdf.getvalue())
 
     assert parsed.normalized_text == ""
     assert parsed.page_count == 1
@@ -87,8 +85,7 @@ def test_accepts_image_notice_without_fabricated_text() -> None:
 def test_normalizes_plain_text_without_changing_words() -> None:
     parsed = parse_notice(
         media_type="text/plain",
-        content=b"Recall\r\n\r\n\r\n\r\nSpinach lot L2418\r\n",
-    )
+        content=b"Recall\r\n\r\n\r\n\r\nSpinach lot L2418\r\n")
 
     assert parsed.normalized_text == "Recall\n\nSpinach lot L2418"
     assert parsed.text_pages[0].locator == "document"
@@ -130,13 +127,11 @@ def test_rejects_text_over_character_limit() -> None:
     with pytest.raises(NoticeParseError, match="100000"):
         parse_notice(
             media_type="text/plain",
-            content=("x" * 100_001).encode("utf-8"),
-        )
+            content=("x" * 100_001).encode("utf-8"))
 
 
 def test_rejects_oversized_decoded_page_before_extracting_text(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    monkeypatch: pytest.MonkeyPatch) -> None:
     extracted = False
 
     class FakeContent:
@@ -159,8 +154,7 @@ def test_rejects_oversized_decoded_page_before_extracting_text(
     monkeypatch.setattr(
         notice_parser,
         "PdfReader",
-        lambda *_args, **_kwargs: FakeReader(),
-    )
+        lambda *_args, **_kwargs: FakeReader())
 
     with pytest.raises(NoticeParseError, match="content limit"):
         parse_notice(media_type="application/pdf", content=b"%PDF-1.4")

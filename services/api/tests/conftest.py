@@ -27,8 +27,7 @@ def make_settings(api_key: str = "", **overrides: object) -> Settings:
         ),
         "UPLOAD_DIR": (
             Path(gettempdir()) / f"batchhelm-upload-test-{uuid4().hex}"
-        ),
-    }
+        )}
     base.update(overrides)
     return Settings(**base)  # type: ignore[arg-type]
 
@@ -51,10 +50,8 @@ def erroring_gateway(status_code: int = 400) -> QwenGateway:
     return QwenGateway(
         make_settings(api_key="test-key"),
         client_factory=lambda: httpx.AsyncClient(
-            base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-            transport=transport,
-        ),
-    )
+                        base_url="https://example.com",
+                        transport=transport))
 
 
 def scripted_gateway(content: dict[str, object]) -> QwenGateway:
@@ -63,14 +60,11 @@ def scripted_gateway(content: dict[str, object]) -> QwenGateway:
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
-            json={"choices": [{"message": {"content": json.dumps(content)}}]},
-        )
+            json={"choices": [{"message": {"content": json.dumps(content)}}]})
 
     transport = httpx.MockTransport(handler)
     return QwenGateway(
         make_settings(api_key="test-key"),
         client_factory=lambda: httpx.AsyncClient(
-            base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-            transport=transport,
-        ),
-    )
+                        base_url="https://example.com",
+                        transport=transport))

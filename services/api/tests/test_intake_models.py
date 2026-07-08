@@ -9,8 +9,7 @@ from batchhelm_api.intake_models import (
     IntakeCreateRequest,
     IntakeStatus,
     RecallCriteriaDraft,
-    RecallIncidentDraft,
-)
+    RecallIncidentDraft)
 from batchhelm_api.models import ShelfInspectionResult
 
 
@@ -24,8 +23,7 @@ def test_intake_create_request_requires_uuid() -> None:
 def test_draft_can_represent_missing_fields_before_review() -> None:
     draft = RecallIncidentDraft(
         criteria=RecallCriteriaDraft(),
-        notice_text="Supplier notice",
-    )
+        notice_text="Supplier notice")
     assert draft.criteria.product_name == ""
     assert draft.inventory == []
     assert draft.review_required is True
@@ -41,8 +39,7 @@ def test_intake_status_and_artifact_roles_are_stable() -> None:
 def test_settings_exposes_separate_intake_database(tmp_path: Path) -> None:
     settings = Settings(
         INTAKE_DATABASE_PATH=tmp_path / "intake.db",
-        _env_file=None,
-    )
+        _env_file=None)
     assert settings.intake_database_path == tmp_path / "intake.db"
 
 

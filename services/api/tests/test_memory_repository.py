@@ -7,8 +7,7 @@ import pytest
 from batchhelm_api.memory_repository import (
     AgentCheckpoint,
     InMemoryMemoryRepository,
-    SQLiteMemoryRepository,
-)
+    SQLiteMemoryRepository)
 from batchhelm_api.models import AgentRunStatus, MemoryKind, OutputSource
 
 
@@ -54,8 +53,7 @@ def test_checkpoints_round_trip(repo) -> None:
             summary="done",
             source=OutputSource.deterministic,
             confidence=90,
-            finished_at="2026-06-27T00:00:00Z",
-        )
+            finished_at="2026-06-27T00:00:00Z")
     )
     checkpoints = repo.list_checkpoints("run-1")
 

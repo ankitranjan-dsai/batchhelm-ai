@@ -527,7 +527,7 @@ class IntakeService:
         return IntakeAccepted(
             intake_id=record.id,
             status=record.status,
-            status_url=f"/api/intakes/{record.id}",
+            status_url=f"/api/v1/intakes/{record.id}",
             created_at=record.created_at,
         )
 

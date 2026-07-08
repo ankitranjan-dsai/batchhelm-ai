@@ -63,8 +63,8 @@ class OrchestrationService:
             run_id=run.id,
             incident_id=run.incident_id,
             status=run.status,
-            events_url=f"/api/orchestration/runs/{run.id}/events",
-            result_url=f"/api/orchestration/runs/{run.id}",
+            events_url=f"/api/v1/orchestration/runs/{run.id}/events",
+            result_url=f"/api/v1/orchestration/runs/{run.id}",
         )
 
     def get(self, run_id: str) -> OrchestrationRunView:

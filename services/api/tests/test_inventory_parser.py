@@ -4,8 +4,7 @@ import pytest
 
 from batchhelm_api.inventory_parser import (
     InventoryParseError,
-    parse_inventory_csv,
-)
+    parse_inventory_csv)
 
 
 def test_maps_header_aliases_and_builds_inventory_rows() -> None:

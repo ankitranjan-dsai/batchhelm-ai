@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     reviewer_role: str = Field(
         default="Operations Manager", validation_alias="REVIEWER_ROLE"
     )
+    demo_api_key: str = Field(
+        default="", validation_alias="DEMO_API_KEY"
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -67,6 +70,10 @@ class Settings(BaseSettings):
     @property
     def qwen_configured(self) -> bool:
         return bool(self.qwen_api_key.strip())
+
+    @property
+    def demo_auth_enabled(self) -> bool:
+        return bool(self.demo_api_key.strip())
 
     @property
     def cors_origin_list(self) -> list[str]:

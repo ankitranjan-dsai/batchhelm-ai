@@ -11,24 +11,21 @@ from batchhelm_api.intake_models import (
     IntakeFieldEvidence,
     IntakeStatus,
     RecallCriteriaDraft,
-    RecallIncidentDraft,
-)
+    RecallIncidentDraft)
 from batchhelm_api.intake_repository import (
     IntakeIdempotencyConflict,
     IntakeStateConflict,
     IntakeStoreUnavailable,
     IntakeVersionConflict,
     SQLiteIntakeRepository,
-    UnavailableIntakeRepository,
-)
+    UnavailableIntakeRepository)
 from batchhelm_api.models import (
     IncidentStatus,
     InventoryItem,
     OutputSource,
     RecallCriteria,
     RecallIncidentInput,
-    Severity,
-)
+    Severity)
 
 
 def make_repository(path: Path) -> SQLiteIntakeRepository:
@@ -49,8 +46,7 @@ def artifacts(intake_id: str) -> list[IntakeArtifact]:
             size_bytes=42,
             sha256="a" * 64,
             relative_path=f"intakes/{intake_id}/notice.txt",
-            created_at="2026-07-04T08:00:00+00:00",
-        ),
+            created_at="2026-07-04T08:00:00+00:00"),
         IntakeArtifact(
             id=f"{intake_id}-inventory",
             intake_id=intake_id,
@@ -61,8 +57,7 @@ def artifacts(intake_id: str) -> list[IntakeArtifact]:
             size_bytes=84,
             sha256="b" * 64,
             relative_path=f"intakes/{intake_id}/inventory.csv",
-            created_at="2026-07-04T08:00:00+00:00",
-        ),
+            created_at="2026-07-04T08:00:00+00:00"),
     ]
 
 
@@ -74,8 +69,7 @@ def review_draft(product: str = "Spinach") -> RecallIncidentDraft:
             upcs=["008500001010"],
             risk_level=Severity.high,
             reason="Possible contamination",
-            source="Central Farms",
-        ),
+            source="Central Farms"),
         notice_text="Spinach L2418 UPC 008500001010 contamination",
         inventory=[
             InventoryItem(
@@ -87,12 +81,10 @@ def review_draft(product: str = "Spinach") -> RecallIncidentDraft:
                 upc="008500001010",
                 on_hand=6,
                 location="Cooler",
-                supplier_alias="Central Farms",
-            )
+                supplier_alias="Central Farms")
         ],
         stores=["Store A"],
-        review_required=True,
-    )
+        review_required=True)
 
 
 def evidence(
@@ -100,8 +92,7 @@ def evidence(
     *,
     source: OutputSource = OutputSource.deterministic,
     value: str = "Spinach",
-    supersedes_id: str | None = None,
-) -> list[IntakeFieldEvidence]:
+    supersedes_id: str | None = None) -> list[IntakeFieldEvidence]:
     return [
         IntakeFieldEvidence(
             id=f"{intake_id}-{source.value}-{value.lower().replace(' ', '-')}",
@@ -114,8 +105,7 @@ def evidence(
             confidence=100 if source == OutputSource.reviewer else 65,
             requires_review=source != OutputSource.reviewer,
             supersedes_id=supersedes_id,
-            created_at="2026-07-04T08:05:00+00:00",
-        )
+            created_at="2026-07-04T08:05:00+00:00")
     ]
 
 
@@ -133,11 +123,9 @@ def confirmed_snapshot(incident_id: str = "incident-1") -> RecallIncidentInput:
             upcs=["008500001010"],
             risk_level=Severity.high,
             reason="Possible contamination",
-            source="Central Farms",
-        ),
+            source="Central Farms"),
         notice_text="Spinach L2418 UPC 008500001010 contamination",
-        inventory=review_draft().inventory,
-    )
+        inventory=review_draft().inventory)
 
 
 def reviewable_repository(tmp_path: Path) -> SQLiteIntakeRepository:
@@ -147,14 +135,12 @@ def reviewable_repository(tmp_path: Path) -> SQLiteIntakeRepository:
         request_id="create-1",
         packet_fingerprint="a" * 64,
         provider_mode="demo-fallback",
-        artifacts=artifacts("intake-1"),
-    )
+        artifacts=artifacts("intake-1"))
     repository.claim_extraction("intake-1")
     repository.save_extraction(
         "intake-1",
         draft=review_draft(),
-        evidence=evidence("intake-1"),
-    )
+        evidence=evidence("intake-1"))
     return repository
 
 
@@ -166,14 +152,12 @@ def test_intake_artifacts_and_evidence_survive_restart(tmp_path: Path) -> None:
         request_id="request-1",
         packet_fingerprint="a" * 64,
         provider_mode="demo-fallback",
-        artifacts=artifacts("intake-1"),
-    )
+        artifacts=artifacts("intake-1"))
     repository.claim_extraction(record.id)
     repository.save_extraction(
         record.id,
         draft=review_draft(),
-        evidence=evidence("intake-1"),
-    )
+        evidence=evidence("intake-1"))
 
     restarted = make_repository(path)
     view = restarted.get_intake(record.id).to_view()
@@ -193,31 +177,27 @@ def test_identical_create_request_reuses_intake(tmp_path: Path) -> None:
         request_id="request-1",
         packet_fingerprint="a" * 64,
         provider_mode="demo-fallback",
-        artifacts=artifacts("intake-1"),
-    )
+        artifacts=artifacts("intake-1"))
     replay = repository.create_intake(
         intake_id="intake-2",
         request_id="request-1",
         packet_fingerprint="a" * 64,
         provider_mode="demo-fallback",
-        artifacts=artifacts("intake-2"),
-    )
+        artifacts=artifacts("intake-2"))
 
     assert replay.id == first.id
     assert repository.list_intake_ids() == {"intake-1"}
 
 
 def test_create_request_cannot_be_reused_for_different_packet(
-    tmp_path: Path,
-) -> None:
+    tmp_path: Path) -> None:
     repository = make_repository(tmp_path / "intake.db")
     repository.create_intake(
         intake_id="intake-1",
         request_id="request-1",
         packet_fingerprint="a" * 64,
         provider_mode="demo-fallback",
-        artifacts=artifacts("intake-1"),
-    )
+        artifacts=artifacts("intake-1"))
 
     with pytest.raises(IntakeIdempotencyConflict):
         repository.create_intake(
@@ -225,8 +205,7 @@ def test_create_request_cannot_be_reused_for_different_packet(
             request_id="request-1",
             packet_fingerprint="b" * 64,
             provider_mode="demo-fallback",
-            artifacts=artifacts("intake-2"),
-        )
+            artifacts=artifacts("intake-2"))
 
 
 def test_stale_reviewer_version_is_rejected(tmp_path: Path) -> None:
@@ -241,9 +220,7 @@ def test_stale_reviewer_version_is_rejected(tmp_path: Path) -> None:
             "intake-1",
             source=OutputSource.reviewer,
             value="Baby Spinach",
-            supersedes_id=first_evidence_id,
-        ),
-    )
+            supersedes_id=first_evidence_id))
 
     assert first.version == 2
     assert len(first.evidence) == 2
@@ -256,9 +233,7 @@ def test_stale_reviewer_version_is_rejected(tmp_path: Path) -> None:
             evidence=evidence(
                 "intake-1",
                 source=OutputSource.reviewer,
-                value="Wrong",
-            ),
-        )
+                value="Wrong"))
 
 
 def test_identical_update_request_is_idempotent(tmp_path: Path) -> None:
@@ -266,22 +241,19 @@ def test_identical_update_request_is_idempotent(tmp_path: Path) -> None:
     reviewer_evidence = evidence(
         "intake-1",
         source=OutputSource.reviewer,
-        value="Baby Spinach",
-    )
+        value="Baby Spinach")
     first = repository.update_draft(
         "intake-1",
         request_id="update-1",
         expected_version=1,
         draft=review_draft(product="Baby Spinach"),
-        evidence=reviewer_evidence,
-    )
+        evidence=reviewer_evidence)
     replay = repository.update_draft(
         "intake-1",
         request_id="update-1",
         expected_version=1,
         draft=review_draft(product="Baby Spinach"),
-        evidence=reviewer_evidence,
-    )
+        evidence=reviewer_evidence)
 
     assert replay.version == first.version
     assert len(replay.evidence) == 2
@@ -294,8 +266,7 @@ def test_confirmation_snapshot_is_immutable(tmp_path: Path) -> None:
         "intake-1",
         request_id="confirm-1",
         expected_version=1,
-        snapshot=snapshot,
-    )
+        snapshot=snapshot)
 
     assert ready.status == IntakeStatus.ready
     assert repository.resolve_incident(snapshot.id) == snapshot
@@ -305,26 +276,22 @@ def test_confirmation_snapshot_is_immutable(tmp_path: Path) -> None:
             request_id="update-late",
             expected_version=ready.version,
             draft=review_draft(),
-            evidence=[],
-        )
+            evidence=[])
 
 
 def test_linked_run_and_artifact_are_resolvable_after_restart(
-    tmp_path: Path,
-) -> None:
+    tmp_path: Path) -> None:
     path = tmp_path / "intake.db"
     repository = reviewable_repository(tmp_path)
     ready = repository.confirm_intake(
         "intake-1",
         request_id="confirm-1",
         expected_version=1,
-        snapshot=confirmed_snapshot(),
-    )
+        snapshot=confirmed_snapshot())
     linked = repository.link_run(
         "intake-1",
         request_id="run-1",
-        run_id="orchestration-1",
-    )
+        run_id="orchestration-1")
 
     restarted = make_repository(path)
     assert linked.version == ready.version + 1
@@ -332,15 +299,13 @@ def test_linked_run_and_artifact_are_resolvable_after_restart(
     assert restarted.get_intake("intake-1").run_id == "orchestration-1"
     artifact = restarted.find_artifact(
         "intake-1",
-        IntakeArtifactRole.recall_notice,
-    )
+        IntakeArtifactRole.recall_notice)
     assert artifact is not None
     assert artifact.original_filename == "notice.txt"
 
 
 def test_recoverable_query_only_returns_unfinished_extraction(
-    tmp_path: Path,
-) -> None:
+    tmp_path: Path) -> None:
     repository = make_repository(tmp_path / "intake.db")
     for intake_id in ("intake-1", "intake-2"):
         repository.create_intake(
@@ -348,8 +313,7 @@ def test_recoverable_query_only_returns_unfinished_extraction(
             request_id=f"create-{intake_id}",
             packet_fingerprint=intake_id[-1] * 64,
             provider_mode="demo-fallback",
-            artifacts=artifacts(intake_id),
-        )
+            artifacts=artifacts(intake_id))
     repository.claim_extraction("intake-2")
 
     assert {
@@ -358,8 +322,7 @@ def test_recoverable_query_only_returns_unfinished_extraction(
 
 
 def test_corrupt_persisted_json_becomes_store_unavailable(
-    tmp_path: Path,
-) -> None:
+    tmp_path: Path) -> None:
     path = tmp_path / "intake.db"
     repository = reviewable_repository(tmp_path)
     with sqlite3.connect(path) as connection:
@@ -380,6 +343,5 @@ def test_unavailable_repository_degrades_predictably() -> None:
     assert repository.list_recoverable() == []
     with pytest.raises(
         IntakeStoreUnavailable,
-        match="Intake storage is unavailable",
-    ):
+        match="Intake storage is unavailable"):
         repository.get_intake("intake-1")

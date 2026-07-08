@@ -48,9 +48,6 @@ class QwenGateway:
     def status(self) -> ProviderStatus:
         return ProviderStatus(
             configured=self.settings.qwen_configured,
-            base_url=str(self.settings.qwen_base_url),
-            text_model=self.settings.qwen_text_model,
-            vision_model=self.settings.qwen_vision_model,
             mode="live" if self.settings.qwen_configured else "demo-fallback",
         )
 
@@ -128,8 +125,6 @@ class QwenGateway:
 
         return QwenVerificationReceipt(
             model=self.settings.qwen_text_model,
-            base_url=str(self.settings.qwen_base_url),
-            provider_request_id=call.request_id,
             latency_ms=call.elapsed_ms,
             response_sha256=hashlib.sha256(raw_text.encode("utf-8")).hexdigest(),
             verified_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),

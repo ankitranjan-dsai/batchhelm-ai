@@ -338,8 +338,10 @@ function MissionEmpty({
       <Activity size={20} aria-hidden="true" />
       <p>
         {connection === "failed"
-          ? "No execution events were received."
-          : "Waiting for the first agent event."}
+          ? "No execution events were received. Retry the agent run."
+          : connection === "starting"
+            ? "Starting agent orchestration..."
+            : "No execution events yet. Agents will appear here as they run."}
       </p>
     </div>
   );

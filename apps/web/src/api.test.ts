@@ -11,16 +11,12 @@ function jsonResponse(payload: unknown, status = 200): Response {
 const provider = {
   configured: true,
   mode: "live",
-  text_model: "qwen3.7-plus",
-  vision_model: "qwen3-vl-plus",
 };
 
 const proof = {
   provider: "qwen-cloud",
   verified: true,
   model: "qwen3.7-plus",
-  base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-  provider_request_id: "chatcmpl-proof",
   latency_ms: 142,
   response_sha256: "a".repeat(64),
   verified_at: "2026-07-05T01:30:00Z",
@@ -36,7 +32,7 @@ describe("fetchDashboardSync", () => {
     let resolveProof: (response: Response) => void = () => undefined;
     const fetchMock = vi.fn((url: string) => {
       return new Promise<Response>((resolve) => {
-        if (url.endsWith("/api/qwen/status")) {
+        if (url.endsWith("/api/v1/qwen/status")) {
           resolveProvider = resolve;
         } else {
           resolveProof = resolve;
@@ -53,7 +49,7 @@ describe("fetchDashboardSync", () => {
 
     const result = await resultPromise;
     expect(result.proofState).toBe("verified");
-    expect(result.proof?.provider_request_id).toBe("chatcmpl-proof");
+    expect(result.proof?.response_sha256).toBe("a".repeat(64));
   });
 
   it("treats a missing receipt as not verified", async () => {

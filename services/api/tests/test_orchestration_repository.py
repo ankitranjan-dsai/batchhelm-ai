@@ -13,13 +13,11 @@ from batchhelm_api.models import (
     AgentRunStatus,
     OrchestrationRunAccepted,
     OrchestrationStartRequest,
-    OutputSource,
-)
+    OutputSource)
 from batchhelm_api.orchestration_repository import (
     OrchestrationIdempotencyConflict,
     OrchestrationStoreUnavailable,
-    SQLiteOrchestrationRepository,
-)
+    SQLiteOrchestrationRepository)
 from batchhelm_api.orchestration_state import OrchestrationCheckpoint
 
 
@@ -31,9 +29,8 @@ def test_start_request_requires_uuid_and_accepted_response_has_urls() -> None:
         run_id="b119e7b8f5aa470ca04ab6ce80e38dd0",
         incident_id="recall-spinach-2026-06",
         status=AgentRunStatus.pending,
-        events_url="/api/orchestration/runs/b119/events",
-        result_url="/api/orchestration/runs/b119",
-    )
+        events_url="/api/v1/orchestration/runs/b119/events",
+        result_url="/api/v1/orchestration/runs/b119")
 
     assert isinstance(request.request_id, UUID)
     assert accepted.status == AgentRunStatus.pending
@@ -43,8 +40,7 @@ def test_start_request_requires_uuid_and_accepted_response_has_urls() -> None:
 def test_checkpoint_defaults_to_an_empty_first_wave() -> None:
     checkpoint = OrchestrationCheckpoint(
         run_id="run-1",
-        started_at="2026-06-30T09:00:00+00:00",
-    )
+        started_at="2026-06-30T09:00:00+00:00")
 
     assert checkpoint.next_wave == 0
     assert checkpoint.results == []
@@ -54,8 +50,7 @@ def test_checkpoint_defaults_to_an_empty_first_wave() -> None:
 def test_settings_exposes_separate_orchestration_database() -> None:
     settings = Settings(
         ORCHESTRATION_DATABASE_PATH="./tmp/orchestration.db",
-        _env_file=None,
-    )
+        _env_file=None)
 
     assert str(settings.orchestration_database_path).endswith("orchestration.db")
 
@@ -75,8 +70,7 @@ def make_event(run_id: str, sequence: int) -> AgentRunEvent:
         type=AgentEventType.reasoning,
         message=f"event {sequence}",
         at=f"2026-06-30T09:00:{sequence:02d}+00:00",
-        source=OutputSource.deterministic,
-    )
+        source=OutputSource.deterministic)
 
 
 def test_run_and_events_survive_repository_restart(tmp_path: Path) -> None:
@@ -86,8 +80,7 @@ def test_run_and_events_survive_repository_restart(tmp_path: Path) -> None:
         run_id="run-1",
         incident_id="incident-1",
         idempotency_key="request-1",
-        provider_mode="demo-fallback",
-    )
+        provider_mode="demo-fallback")
     repository.append_event(make_event(run.id, 1))
 
     restarted = make_repository(path)
@@ -97,21 +90,18 @@ def test_run_and_events_survive_repository_restart(tmp_path: Path) -> None:
 
 
 def test_same_idempotency_key_reuses_run_and_conflicting_incident_fails(
-    tmp_path: Path,
-) -> None:
+    tmp_path: Path) -> None:
     repository = make_repository(tmp_path / "orchestration.db")
     first = repository.create_run(
         run_id="run-1",
         incident_id="incident-1",
         idempotency_key="request-1",
-        provider_mode="demo-fallback",
-    )
+        provider_mode="demo-fallback")
     replay = repository.create_run(
         run_id="run-2",
         incident_id="incident-1",
         idempotency_key="request-1",
-        provider_mode="demo-fallback",
-    )
+        provider_mode="demo-fallback")
 
     assert replay.id == first.id
     with pytest.raises(OrchestrationIdempotencyConflict):
@@ -119,8 +109,7 @@ def test_same_idempotency_key_reuses_run_and_conflicting_incident_fails(
             run_id="run-3",
             incident_id="incident-2",
             idempotency_key="request-1",
-            provider_mode="demo-fallback",
-        )
+            provider_mode="demo-fallback")
 
 
 def test_concurrent_identical_starts_create_one_run(tmp_path: Path) -> None:
@@ -131,8 +120,7 @@ def test_concurrent_identical_starts_create_one_run(tmp_path: Path) -> None:
             run_id=f"run-{index}",
             incident_id="incident-1",
             idempotency_key="request-1",
-            provider_mode="demo-fallback",
-        ).id
+            provider_mode="demo-fallback").id
 
     with ThreadPoolExecutor(max_workers=6) as pool:
         ids = list(pool.map(create, range(6)))
@@ -141,21 +129,18 @@ def test_concurrent_identical_starts_create_one_run(tmp_path: Path) -> None:
 
 
 def test_checkpoint_is_replaced_atomically_and_survives_restart(
-    tmp_path: Path,
-) -> None:
+    tmp_path: Path) -> None:
     path = tmp_path / "orchestration.db"
     repository = make_repository(path)
     repository.create_run(
         run_id="run-1",
         incident_id="incident-1",
         idempotency_key="request-1",
-        provider_mode="demo-fallback",
-    )
+        provider_mode="demo-fallback")
     first = OrchestrationCheckpoint(
         run_id="run-1",
         started_at="2026-06-30T09:00:00+00:00",
-        next_wave=1,
-    )
+        next_wave=1)
     second = first.model_copy(update={"next_wave": 2})
 
     first_record = repository.save_checkpoint("run-1", first)
@@ -173,8 +158,7 @@ def test_event_cursor_returns_only_later_events(tmp_path: Path) -> None:
         run_id="run-1",
         incident_id="incident-1",
         idempotency_key="request-1",
-        provider_mode="demo-fallback",
-    )
+        provider_mode="demo-fallback")
     for sequence in range(1, 4):
         repository.append_event(make_event("run-1", sequence))
 
@@ -190,8 +174,7 @@ def test_duplicate_event_sequence_is_rejected(tmp_path: Path) -> None:
         run_id="run-1",
         incident_id="incident-1",
         idempotency_key="request-1",
-        provider_mode="demo-fallback",
-    )
+        provider_mode="demo-fallback")
     repository.append_event(make_event("run-1", 1))
 
     with pytest.raises(OrchestrationStoreUnavailable):

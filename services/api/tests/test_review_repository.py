@@ -9,8 +9,7 @@ from batchhelm_api.models import ReviewStatus
 from batchhelm_api.review_repository import (
     ReviewDecisionRecord,
     ReviewIdempotencyConflict,
-    SQLiteReviewRepository,
-)
+    SQLiteReviewRepository)
 
 
 def make_record(
@@ -19,8 +18,7 @@ def make_record(
     request_id: str,
     decision: ReviewStatus,
     decided_at: str,
-    note: str,
-) -> ReviewDecisionRecord:
+    note: str) -> ReviewDecisionRecord:
     return ReviewDecisionRecord(
         decision_id=decision_id,
         request_id=request_id,
@@ -30,8 +28,7 @@ def make_record(
         decision=decision,
         reviewer="Operations Manager",
         note=note,
-        decided_at=decided_at,
-    )
+        decided_at=decided_at)
 
 
 def test_sqlite_repository_survives_reinstantiation(tmp_path: Path) -> None:
@@ -44,24 +41,21 @@ def test_sqlite_repository_survives_reinstantiation(tmp_path: Path) -> None:
             request_id="11111111-1111-4111-8111-111111111111",
             decision=ReviewStatus.approved,
             decided_at="2026-06-27T09:00:00+00:00",
-            note="Approved for supplier submission.",
-        )
+            note="Approved for supplier submission.")
     )
 
     restarted = SQLiteReviewRepository(database_path)
     restarted.initialize()
     records = restarted.list_for_packet(
         incident_id="recall-spinach-2026-06",
-        packet_version="sha256:packet-one",
-    )
+        packet_version="sha256:packet-one")
 
     assert [record.decision_id for record in records] == ["review-1"]
     assert records[0].decision == ReviewStatus.approved
 
 
 def test_sqlite_repository_returns_decisions_in_append_order(
-    tmp_path: Path,
-) -> None:
+    tmp_path: Path) -> None:
     repository = SQLiteReviewRepository(tmp_path / "batchhelm.db")
     repository.initialize()
     repository.append(
@@ -70,8 +64,7 @@ def test_sqlite_repository_returns_decisions_in_append_order(
             request_id="11111111-1111-4111-8111-111111111111",
             decision=ReviewStatus.approved,
             decided_at="2026-06-27T09:00:00+00:00",
-            note="Approved.",
-        )
+            note="Approved.")
     )
     repository.append(
         make_record(
@@ -79,14 +72,12 @@ def test_sqlite_repository_returns_decisions_in_append_order(
             request_id="22222222-2222-4222-8222-222222222222",
             decision=ReviewStatus.needs_changes,
             decided_at="2026-06-27T09:05:00+00:00",
-            note="Attach signed disposal records.",
-        )
+            note="Attach signed disposal records.")
     )
 
     records = repository.list_for_packet(
         incident_id="recall-spinach-2026-06",
-        packet_version="sha256:packet-one",
-    )
+        packet_version="sha256:packet-one")
 
     assert [record.decision_id for record in records] == ["review-1", "review-2"]
 
@@ -99,8 +90,7 @@ def test_identical_request_id_is_idempotent(tmp_path: Path) -> None:
         request_id="11111111-1111-4111-8111-111111111111",
         decision=ReviewStatus.approved,
         decided_at="2026-06-27T09:00:00+00:00",
-        note="Approved.",
-    )
+        note="Approved.")
 
     first = repository.append(record)
     replay = repository.append(
@@ -109,21 +99,18 @@ def test_identical_request_id_is_idempotent(tmp_path: Path) -> None:
             request_id=record.request_id,
             decision=record.decision,
             decided_at="2026-06-27T09:01:00+00:00",
-            note=record.note,
-        )
+            note=record.note)
     )
     records = repository.list_for_packet(
         incident_id=record.incident_id,
-        packet_version=record.packet_version,
-    )
+        packet_version=record.packet_version)
 
     assert replay == first
     assert len(records) == 1
 
 
 def test_request_id_reuse_with_different_payload_conflicts(
-    tmp_path: Path,
-) -> None:
+    tmp_path: Path) -> None:
     repository = SQLiteReviewRepository(tmp_path / "batchhelm.db")
     repository.initialize()
     record = make_record(
@@ -131,8 +118,7 @@ def test_request_id_reuse_with_different_payload_conflicts(
         request_id="11111111-1111-4111-8111-111111111111",
         decision=ReviewStatus.approved,
         decided_at="2026-06-27T09:00:00+00:00",
-        note="Approved.",
-    )
+        note="Approved.")
     repository.append(record)
 
     with pytest.raises(ReviewIdempotencyConflict):
@@ -142,8 +128,7 @@ def test_request_id_reuse_with_different_payload_conflicts(
                 request_id=record.request_id,
                 decision=ReviewStatus.needs_changes,
                 decided_at="2026-06-27T09:01:00+00:00",
-                note="Attach disposal records.",
-            )
+                note="Attach disposal records.")
         )
 
 
@@ -187,17 +172,14 @@ def test_repository_migrates_v1_packet_generation_time(tmp_path: Path) -> None:
                 "approved",
                 "Operations Manager",
                 "Approved.",
-                "2026-06-27T09:00:00+00:00",
-            ),
-        )
+                "2026-06-27T09:00:00+00:00"))
         connection.execute("PRAGMA user_version = 1")
 
     repository = SQLiteReviewRepository(database_path)
     repository.initialize()
     record = repository.list_for_packet(
         incident_id="recall-spinach-2026-06",
-        packet_version="sha256:packet-one",
-    )[0]
+        packet_version="sha256:packet-one")[0]
     with sqlite3.connect(database_path) as connection:
         schema_version = int(
             connection.execute("PRAGMA user_version").fetchone()[0]
@@ -208,8 +190,7 @@ def test_repository_migrates_v1_packet_generation_time(tmp_path: Path) -> None:
 
 
 def test_concurrent_identical_requests_resolve_to_one_record(
-    tmp_path: Path,
-) -> None:
+    tmp_path: Path) -> None:
     database_path = tmp_path / "batchhelm.db"
     repository = SQLiteReviewRepository(database_path)
     repository.initialize()
@@ -225,8 +206,7 @@ def test_concurrent_identical_requests_resolve_to_one_record(
                 request_id="11111111-1111-4111-8111-111111111111",
                 decision=ReviewStatus.approved,
                 decided_at=f"2026-06-27T09:00:0{index}+00:00",
-                note="Approved.",
-            )
+                note="Approved.")
         )
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -234,8 +214,7 @@ def test_concurrent_identical_requests_resolve_to_one_record(
 
     records = repository.list_for_packet(
         incident_id="recall-spinach-2026-06",
-        packet_version="sha256:packet-one",
-    )
+        packet_version="sha256:packet-one")
 
     assert len(records) == 1
     assert all(result.request_id == records[0].request_id for result in results)

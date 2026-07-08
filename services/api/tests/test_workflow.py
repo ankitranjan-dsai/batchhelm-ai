@@ -3,8 +3,7 @@ from batchhelm_api.sample_data import build_demo_incident
 from batchhelm_api.workflow import (
     analyze_recall_incident,
     build_customer_notice,
-    calculate_evidence_progress,
-)
+    calculate_evidence_progress)
 
 
 def test_demo_recall_matches_all_affected_inventory() -> None:
@@ -20,8 +19,7 @@ def test_demo_recall_matches_all_affected_inventory() -> None:
         "L2419",
         "L2420",
         "L2421",
-        "L2422",
-    }
+        "L2422"}
     assert all(item.status == "quarantined" for item in analysis.inventory)
 
 

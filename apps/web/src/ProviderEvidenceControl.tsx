@@ -205,22 +205,10 @@ export function ProviderEvidenceControl({
                       <dt>Latency</dt>
                       <dd>{proof.latency_ms} ms</dd>
                     </div>
-                    <div>
-                      <dt>Provider request</dt>
-                      <dd className="provider-evidence-mono">
-                        {proof.provider_request_id ?? "Not returned"}
-                      </dd>
-                    </div>
-                    <div className="provider-evidence-wide">
-                      <dt>Endpoint</dt>
-                      <dd className="provider-evidence-mono">
-                        {proof.base_url}
-                      </dd>
-                    </div>
                     <div className="provider-evidence-wide">
                       <dt>Response fingerprint</dt>
                       <dd className="provider-evidence-mono">
-                        {proof.response_sha256}
+                        {proof.response_sha256.slice(0, 16)}…
                       </dd>
                     </div>
                   </dl>

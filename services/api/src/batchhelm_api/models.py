@@ -183,9 +183,6 @@ class RecallAnalysis(BaseModel):
 class ProviderStatus(BaseModel):
     provider: str = "qwen"
     configured: bool
-    base_url: str
-    text_model: str
-    vision_model: str
     mode: str
 
 
@@ -193,8 +190,6 @@ class QwenVerificationReceipt(BaseModel):
     provider: str = "qwen-cloud"
     verified: bool = True
     model: str
-    base_url: str
-    provider_request_id: str | None = None
     latency_ms: int = Field(ge=0)
     response_sha256: str = Field(min_length=64, max_length=64)
     verified_at: str

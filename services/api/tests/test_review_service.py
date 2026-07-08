@@ -15,14 +15,12 @@ def packet_context():
     packet = build_evidence_packet(
         incident=incident,
         analysis=analysis,
-        inspection=build_demo_shelf_inspection(),
-    )
+        inspection=build_demo_shelf_inspection())
     return incident, analysis, packet
 
 
 def test_service_reconstructs_full_history_and_latest_readiness(
-    tmp_path: Path,
-) -> None:
+    tmp_path: Path) -> None:
     repository = SQLiteReviewRepository(tmp_path / "batchhelm.db")
     repository.initialize()
     timestamps = iter(
@@ -35,8 +33,7 @@ def test_service_reconstructs_full_history_and_latest_readiness(
     service = ReviewService(
         repository,
         clock=lambda: next(timestamps),
-        decision_id_factory=lambda: next(ids),
-    )
+        decision_id_factory=lambda: next(ids))
     incident, analysis, packet = packet_context()
 
     service.record_decision(
@@ -47,9 +44,7 @@ def test_service_reconstructs_full_history_and_latest_readiness(
             request_id="11111111-1111-4111-8111-111111111111",
             reviewer="Operations Manager",
             decision="approved",
-            note="Approved for supplier submission.",
-        ),
-    )
+            note="Approved for supplier submission."))
     final = service.record_decision(
         incident=incident,
         analysis=analysis,
@@ -58,9 +53,7 @@ def test_service_reconstructs_full_history_and_latest_readiness(
             request_id="22222222-2222-4222-8222-222222222222",
             reviewer="Operations Manager",
             decision="needs-changes",
-            note="Attach signed disposal records.",
-        ),
-    )
+            note="Attach signed disposal records."))
 
     assert final.status == "needs-changes"
     assert final.ready_to_submit is False
@@ -73,8 +66,7 @@ def test_changed_packet_version_starts_a_fresh_review(tmp_path: Path) -> None:
     service = ReviewService(
         repository,
         clock=lambda: datetime(2026, 6, 27, 9, 0, tzinfo=timezone.utc),
-        decision_id_factory=lambda: "review-1",
-    )
+        decision_id_factory=lambda: "review-1")
     incident, analysis, packet = packet_context()
     service.record_decision(
         incident=incident,
@@ -84,9 +76,7 @@ def test_changed_packet_version_starts_a_fresh_review(tmp_path: Path) -> None:
             request_id="11111111-1111-4111-8111-111111111111",
             reviewer="Operations Manager",
             decision="approved",
-            note="Approved.",
-        ),
-    )
+            note="Approved."))
     changed_packet = packet.model_copy(
         update={"packet_version": "sha256:changed-evidence"}
     )
@@ -94,8 +84,7 @@ def test_changed_packet_version_starts_a_fresh_review(tmp_path: Path) -> None:
     state = service.get_state(
         incident=incident,
         analysis=analysis,
-        packet=changed_packet,
-    )
+        packet=changed_packet)
 
     assert state.status == "needs-changes"
     assert state.ready_to_submit is False

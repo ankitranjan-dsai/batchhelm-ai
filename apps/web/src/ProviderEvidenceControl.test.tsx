@@ -16,18 +16,13 @@ import { ProviderEvidenceControl } from "./ProviderEvidenceControl";
 const liveProvider: ProviderStatus = {
   provider: "qwen",
   configured: true,
-  base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
   mode: "live",
-  text_model: "qwen3.7-plus",
-  vision_model: "qwen3-vl-plus",
 };
 
 const proof: QwenVerificationReceipt = {
   provider: "qwen-cloud",
   verified: true,
   model: "qwen3.7-plus",
-  base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-  provider_request_id: "chatcmpl-proof-2026",
   latency_ms: 142,
   response_sha256: "a".repeat(64),
   verified_at: "2026-07-05T01:30:00Z",
@@ -58,15 +53,9 @@ describe("ProviderEvidenceControl", () => {
     expect(dialog).toBeTruthy();
     expect(dialog.parentElement?.parentElement).toBe(document.body);
     expect(screen.getByText("qwen3.7-plus")).toBeTruthy();
-    expect(screen.getByText("chatcmpl-proof-2026")).toBeTruthy();
     expect(screen.getByText("142 ms")).toBeTruthy();
     expect(screen.getByText(/05 Jul 2026/)).toBeTruthy();
-    expect(
-      screen.getByText(
-        "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-      ),
-    ).toBeTruthy();
-    expect(screen.getByText("a".repeat(64))).toBeTruthy();
+    expect(screen.getByText(/a{16}/)).toBeTruthy();
     expect(document.body.textContent).not.toContain("API key");
     expect(document.body.textContent).not.toContain('{"status":"verified"}');
   });

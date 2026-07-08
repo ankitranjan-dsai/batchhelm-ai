@@ -57,5 +57,5 @@ def save_image_upload(
         stored_filename=stored_filename,
         media_type=media_type,
         size_bytes=len(content),
-        path=str(destination),
+        path=stored_filename,
     )

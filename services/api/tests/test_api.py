@@ -9,8 +9,7 @@ from batchhelm_api.memory_repository import InMemoryMemoryRepository
 from batchhelm_api.qwen import QwenGateway
 from batchhelm_api.qwen_verification_repository import (
     InMemoryQwenVerificationRepository,
-    QwenVerificationStoreUnavailable,
-)
+    QwenVerificationStoreUnavailable)
 
 
 def make_client() -> TestClient:
@@ -20,8 +19,7 @@ def make_client() -> TestClient:
         QWEN_TEXT_MODEL="qwen-plus",
         QWEN_VISION_MODEL="qwen-vl-plus",
         APP_ENV="test",
-        LOG_LEVEL="debug",
-    )
+        LOG_LEVEL="debug")
     return TestClient(
         create_app(settings=settings, memory_repository=InMemoryMemoryRepository())
     )
@@ -29,8 +27,7 @@ def make_client() -> TestClient:
 
 def make_qwen_proof_client(
     *,
-    proof_token: str = "proof-token",
-) -> TestClient:
+    proof_token: str = "proof-token") -> TestClient:
     settings = Settings(
         QWEN_API_KEY="test-key",
         QWEN_BASE_URL="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
@@ -38,8 +35,7 @@ def make_qwen_proof_client(
         QWEN_VISION_MODEL="qwen3-vl-plus",
         QWEN_PROOF_TOKEN=proof_token,
         APP_ENV="test",
-        LOG_LEVEL="debug",
-    )
+        LOG_LEVEL="debug")
 
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(
@@ -54,24 +50,19 @@ def make_qwen_proof_client(
                             )
                         }
                     }
-                ],
-            },
-        )
+                ]})
 
     gateway = QwenGateway(
         settings,
         client_factory=lambda: httpx.AsyncClient(
-            base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-            transport=httpx.MockTransport(handler),
-        ),
-    )
+                        base_url="https://example.com",
+                        transport=httpx.MockTransport(handler)))
     return TestClient(
         create_app(
             settings=settings,
             memory_repository=InMemoryMemoryRepository(),
             qwen_gateway_factory=lambda: gateway,
-            qwen_verification_repository=InMemoryQwenVerificationRepository(),
-        )
+            qwen_verification_repository=InMemoryQwenVerificationRepository())
     )
 
 
@@ -82,12 +73,11 @@ def test_health_endpoint() -> None:
     assert response.json() == {
         "status": "ok",
         "service": "batchhelm-api",
-        "version": "0.2.0",
-    }
+        "version": "0.2.0"}
 
 
 def test_demo_incident_endpoint_returns_recall_input() -> None:
-    response = make_client().get("/api/incidents/demo")
+    response = make_client().get("/api/v1/incidents/demo")
 
     assert response.status_code == 200
     payload = response.json()
@@ -102,7 +92,7 @@ def test_demo_incident_endpoint_returns_recall_input() -> None:
 
 
 def test_demo_analysis_endpoint_returns_workflow_output() -> None:
-    response = make_client().post("/api/incidents/demo/analyze")
+    response = make_client().post("/api/v1/incidents/demo/analyze")
 
     assert response.status_code == 200
     payload = response.json()
@@ -113,7 +103,7 @@ def test_demo_analysis_endpoint_returns_workflow_output() -> None:
 
 
 def test_qwen_status_reports_demo_fallback_when_key_missing() -> None:
-    response = make_client().get("/api/qwen/status")
+    response = make_client().get("/api/v1/qwen/status")
 
     assert response.status_code == 200
     assert response.json()["mode"] == "demo-fallback"
@@ -121,7 +111,7 @@ def test_qwen_status_reports_demo_fallback_when_key_missing() -> None:
 
 
 def test_qwen_summary_uses_fallback_without_key() -> None:
-    response = make_client().post("/api/qwen/recall-summary")
+    response = make_client().post("/api/v1/qwen/recall-summary")
 
     assert response.status_code == 200
     payload = response.json()
@@ -130,7 +120,7 @@ def test_qwen_summary_uses_fallback_without_key() -> None:
 
 
 def test_qwen_proof_returns_not_found_before_first_verification() -> None:
-    response = make_qwen_proof_client().get("/api/qwen/proof")
+    response = make_qwen_proof_client().get("/api/v1/qwen/proof")
 
     assert response.status_code == 404
     assert response.json()["code"] == "qwen_proof_not_found"
@@ -138,9 +128,8 @@ def test_qwen_proof_returns_not_found_before_first_verification() -> None:
 
 def test_qwen_verify_is_disabled_without_a_proof_token() -> None:
     response = make_qwen_proof_client(proof_token="").post(
-        "/api/qwen/verify",
-        headers={"X-BatchHelm-Proof-Token": "proof-token"},
-    )
+        "/api/v1/qwen/verify",
+        headers={"X-BatchHelm-Proof-Token": "proof-token"})
 
     assert response.status_code == 503
     assert response.json()["code"] == "qwen_proof_disabled"
@@ -148,9 +137,8 @@ def test_qwen_verify_is_disabled_without_a_proof_token() -> None:
 
 def test_qwen_verify_rejects_the_wrong_proof_token() -> None:
     response = make_qwen_proof_client().post(
-        "/api/qwen/verify",
-        headers={"X-BatchHelm-Proof-Token": "wrong-token"},
-    )
+        "/api/v1/qwen/verify",
+        headers={"X-BatchHelm-Proof-Token": "wrong-token"})
 
     assert response.status_code == 403
     assert response.json()["code"] == "qwen_proof_forbidden"
@@ -160,17 +148,16 @@ def test_qwen_verify_persists_a_public_redacted_receipt() -> None:
     client = make_qwen_proof_client()
 
     verified = client.post(
-        "/api/qwen/verify",
-        headers={"X-BatchHelm-Proof-Token": "proof-token"},
-    )
-    public = client.get("/api/qwen/proof")
+        "/api/v1/qwen/verify",
+        headers={"X-BatchHelm-Proof-Token": "proof-token"})
+    public = client.get("/api/v1/qwen/proof")
 
     assert verified.status_code == 200
     assert public.status_code == 200
     assert public.json() == verified.json()
     assert public.json()["verified"] is True
     assert public.json()["model"] == "qwen3.7-plus"
-    assert public.json()["provider_request_id"] == "chatcmpl-api-proof"
+    assert "provider_request_id" not in public.text
     serialized = public.text
     assert "test-key" not in serialized
     assert '"status":"verified"' not in serialized
@@ -193,11 +180,10 @@ def test_qwen_proof_reports_unavailable_storage() -> None:
         create_app(
             settings=settings,
             memory_repository=InMemoryMemoryRepository(),
-            qwen_verification_repository=UnavailableProofRepository(),
-        )
+            qwen_verification_repository=UnavailableProofRepository())
     )
 
-    response = client.get("/api/qwen/proof")
+    response = client.get("/api/v1/qwen/proof")
 
     assert response.status_code == 503
     assert response.json()["code"] == "qwen_proof_store_unavailable"
@@ -205,7 +191,7 @@ def test_qwen_proof_reports_unavailable_storage() -> None:
 
 def test_customer_notice_endpoint_accepts_affected_item_override() -> None:
     response = make_client().post(
-        "/api/notices/customer-draft", json={"affected_items": 18}
+        "/api/v1/notices/customer-draft", json={"affected_items": 18}
     )
 
     assert response.status_code == 200

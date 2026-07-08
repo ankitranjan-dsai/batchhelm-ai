@@ -28,7 +28,7 @@ def demo_upload_metadata() -> UploadMetadata:
         stored_filename="demo-shelf-photo.png",
         media_type="image/png",
         size_bytes=DEMO_SHELF_IMAGE_PATH.stat().st_size,
-        path="sample-data/store-b-cooler-spinach.png",
+        path="",
     )
 
 

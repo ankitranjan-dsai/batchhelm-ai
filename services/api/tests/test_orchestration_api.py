@@ -10,8 +10,7 @@ from batchhelm_api.memory_repository import InMemoryMemoryRepository
 from batchhelm_api.models import AgentEventType, AgentRunEvent, OutputSource
 from batchhelm_api.orchestration_repository import (
     OrchestrationIdempotencyConflict,
-    OrchestrationStoreUnavailable,
-)
+    OrchestrationStoreUnavailable)
 from tests.conftest import make_settings
 
 
@@ -19,13 +18,12 @@ def make_client(**overrides: object) -> TestClient:
     return TestClient(
         create_app(
             settings=make_settings(**overrides),
-            memory_repository=InMemoryMemoryRepository(),
-        )
+            memory_repository=InMemoryMemoryRepository())
     )
 
 
 def test_list_agents_describes_the_society() -> None:
-    response = make_client().get("/api/agents")
+    response = make_client().get("/api/v1/agents")
 
     assert response.status_code == 200
     names = [agent["name"] for agent in response.json()]
@@ -35,7 +33,7 @@ def test_list_agents_describes_the_society() -> None:
 
 
 def test_run_endpoint_returns_full_orchestration_result() -> None:
-    response = make_client().post("/api/incidents/demo/run")
+    response = make_client().post("/api/v1/incidents/demo/run")
 
     assert response.status_code == 200
     payload = response.json()
@@ -47,7 +45,7 @@ def test_run_endpoint_returns_full_orchestration_result() -> None:
 
 
 def test_stream_endpoint_emits_sse_events_and_result() -> None:
-    response = make_client().get("/api/incidents/demo/run/stream")
+    response = make_client().get("/api/v1/incidents/demo/run/stream")
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
@@ -59,9 +57,9 @@ def test_stream_endpoint_emits_sse_events_and_result() -> None:
 
 def test_memory_endpoint_reflects_run_writes() -> None:
     client = make_client()
-    client.post("/api/incidents/demo/run")
+    client.post("/api/v1/incidents/demo/run")
 
-    response = client.get("/api/memory")
+    response = client.get("/api/v1/memory")
 
     assert response.status_code == 200
     records = response.json()
@@ -69,7 +67,7 @@ def test_memory_endpoint_reflects_run_writes() -> None:
 
 
 def test_briefing_endpoint_returns_management_briefing() -> None:
-    response = make_client().post("/api/briefing/demo")
+    response = make_client().post("/api/v1/briefing/demo")
 
     assert response.status_code == 200
     payload = response.json()
@@ -86,9 +84,9 @@ def test_request_id_header_is_returned() -> None:
 def test_rate_limit_returns_429_after_threshold() -> None:
     client = make_client(RATE_LIMIT_PER_MINUTE=2)
 
-    assert client.get("/api/incidents/demo").status_code == 200
-    assert client.get("/api/incidents/demo").status_code == 200
-    blocked = client.get("/api/incidents/demo")
+    assert client.get("/api/v1/incidents/demo").status_code == 200
+    assert client.get("/api/v1/incidents/demo").status_code == 200
+    blocked = client.get("/api/v1/incidents/demo")
 
     assert blocked.status_code == 429
     assert blocked.json()["code"] == "rate_limited"
@@ -96,9 +94,9 @@ def test_rate_limit_returns_429_after_threshold() -> None:
 
 def test_telemetry_counts_requests() -> None:
     client = make_client()
-    client.get("/api/incidents/demo")
+    client.get("/api/v1/incidents/demo")
 
-    response = client.get("/api/telemetry")
+    response = client.get("/api/v1/telemetry")
 
     assert response.status_code == 200
     assert response.json()["counters"]["requests"] >= 1
@@ -113,8 +111,7 @@ def test_sse_frame_uses_sequence_as_standard_event_id() -> None:
         type=AgentEventType.completed,
         message="Inventory matched.",
         at="2026-06-30T09:00:00+00:00",
-        source=OutputSource.qwen,
-    )
+        source=OutputSource.qwen)
 
     frame = sse_pack(event)
 
@@ -126,19 +123,17 @@ def test_start_status_and_event_stream_share_one_run() -> None:
         request_id = str(uuid4())
 
         started = client.post(
-            "/api/incidents/demo/runs",
-            json={"request_id": request_id},
-        )
+            "/api/v1/incidents/demo/runs",
+            json={"request_id": request_id})
 
         assert started.status_code == 202
         accepted = started.json()
         run_id = accepted["run_id"]
         with client.stream(
             "GET",
-            f"/api/orchestration/runs/{run_id}/events",
-        ) as response:
+            f"/api/v1/orchestration/runs/{run_id}/events") as response:
             body = "".join(response.iter_text())
-        status = client.get(f"/api/orchestration/runs/{run_id}")
+        status = client.get(f"/api/v1/orchestration/runs/{run_id}")
 
         assert response.status_code == 200
         assert f'"run_id":"{run_id}"' in body
@@ -150,22 +145,19 @@ def test_start_status_and_event_stream_share_one_run() -> None:
 def test_last_event_id_replays_only_missing_events() -> None:
     with make_client() as client:
         started = client.post(
-            "/api/incidents/demo/runs",
-            json={"request_id": str(uuid4())},
-        ).json()
+            "/api/v1/incidents/demo/runs",
+            json={"request_id": str(uuid4())}).json()
         run_id = started["run_id"]
 
         with client.stream(
             "GET",
-            f"/api/orchestration/runs/{run_id}/events",
-        ) as initial:
+            f"/api/v1/orchestration/runs/{run_id}/events") as initial:
             initial_body = "".join(initial.iter_text())
         assert "event: result" in initial_body
 
         response = client.get(
-            f"/api/orchestration/runs/{run_id}/events",
-            headers={"Last-Event-ID": "2"},
-        )
+            f"/api/v1/orchestration/runs/{run_id}/events",
+            headers={"Last-Event-ID": "2"})
 
         assert "id: 1\n" not in response.text
         assert "id: 2\n" not in response.text
@@ -174,9 +166,9 @@ def test_last_event_id_replays_only_missing_events() -> None:
 
 def test_unknown_run_and_invalid_cursor_are_structured_errors() -> None:
     with make_client() as client:
-        missing = client.get("/api/orchestration/runs/missing")
+        missing = client.get("/api/v1/orchestration/runs/missing")
         invalid = client.get(
-            "/api/orchestration/runs/missing/events?after=-1"
+            "/api/v1/orchestration/runs/missing/events?after=-1"
         )
 
         assert missing.status_code == 404
@@ -199,16 +191,14 @@ def test_orchestration_store_initialization_failure_degrades_to_503() -> None:
 
     with TestClient(app) as client:
         response = client.post(
-            "/api/incidents/demo/runs",
-            json={"request_id": str(uuid4())},
-        )
+            "/api/v1/incidents/demo/runs",
+            json={"request_id": str(uuid4())})
 
     assert response.status_code == 503
     assert response.json() == {
         "code": "orchestration_store_unavailable",
         "message": "Orchestration history is temporarily unavailable.",
-        "details": None,
-    }
+        "details": None}
     assert "sqlite" not in response.text.lower()
 
 
@@ -232,9 +222,8 @@ def test_orchestration_idempotency_conflict_is_sanitized() -> None:
 
     with TestClient(app) as client:
         response = client.post(
-            "/api/incidents/demo/runs",
-            json={"request_id": str(uuid4())},
-        )
+            "/api/v1/incidents/demo/runs",
+            json={"request_id": str(uuid4())})
 
     assert response.status_code == 409
     assert response.json()["code"] == "run_idempotency_conflict"
@@ -244,9 +233,8 @@ def test_orchestration_idempotency_conflict_is_sanitized() -> None:
 def test_non_integer_last_event_id_is_rejected() -> None:
     with make_client() as client:
         response = client.get(
-            "/api/orchestration/runs/missing/events",
-            headers={"Last-Event-ID": "not-a-number"},
-        )
+            "/api/v1/orchestration/runs/missing/events",
+            headers={"Last-Event-ID": "not-a-number"})
 
     assert response.status_code == 400
     assert response.json()["code"] == "invalid_event_cursor"

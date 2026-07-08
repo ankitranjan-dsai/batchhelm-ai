@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager, suppress
 from typing import Annotated, Any
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, ValidationError
@@ -223,6 +223,7 @@ def create_app(
         description="Autonomous recall command center API for BatchHelm.",
         lifespan=app_lifespan,
     )
+    # Hide server version in responses
     app.state.settings = resolved_settings
     app.state.review_service = review_service
     app.state.memory = memory
@@ -231,6 +232,23 @@ def create_app(
     app.state.telemetry = telemetry
     app.state.qwen_gateway_factory = gateway_factory
     app.state.qwen_verification_repository = verification_store
+
+    @app.middleware("http")
+    async def security_headers_middleware(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        return response
+
+    @app.middleware("http")
+    async def hide_server_header_middleware(request: Request, call_next):
+        response = await call_next(request)
+        # Remove Server header to avoid version disclosure
+        if "server" in response.headers:
+            del response.headers["server"]
+        return response
 
     # Inner middleware first; CORS added last so it stays outermost and always
     # decorates responses (including rate-limit 429s) with CORS headers.
@@ -242,10 +260,27 @@ def create_app(
     app.add_middleware(
         CORSMiddleware,
         allow_origins=resolved_settings.cors_origin_list,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+        allow_headers=["Content-Type", "X-Request-ID", "X-BatchHelm-Proof-Token", "Authorization", "X-BatchHelm-Demo-Key"],
     )
+
+    def require_demo_auth(request: Request) -> None:
+        if not resolved_settings.demo_auth_enabled:
+            return
+        supplied = request.headers.get("X-BatchHelm-Demo-Key", "")
+        if not secrets.compare_digest(supplied, resolved_settings.demo_api_key):
+            raise HTTPException(
+                status_code=401,
+                detail="Demo API key is required. Set X-BatchHelm-Demo-Key header.",
+            )
+
+    @app.middleware("http")
+    async def demo_auth_middleware(request: Request, call_next):
+        path = request.url.path
+        if path.startswith("/api/v1/"):
+            require_demo_auth(request)
+        return await call_next(request)
 
     @app.exception_handler(QwenGatewayError)
     async def qwen_error_handler(
@@ -498,11 +533,12 @@ def create_app(
         return HealthResponse(status="ok", service="batchhelm-api", version="0.2.0")
 
     @app.post(
-        "/api/intakes",
+        "/api/v1/intakes",
         response_model=IntakeAccepted,
         status_code=202,
     )
     async def create_intake(
+
         request_id: Annotated[str, Form()],
         notice: Annotated[UploadFile, File()],
         inventory: Annotated[UploadFile, File()],
@@ -546,23 +582,26 @@ def create_app(
             )
         )
 
-    @app.get("/api/intakes/{intake_id}", response_model=IntakeView)
+    @app.get("/api/v1/intakes/{intake_id}", response_model=IntakeView)
     async def get_intake(
+
         intake_id: str,
         service: IntakeService = Depends(get_intake_service),
     ) -> IntakeView:
         return service.get(intake_id)
 
-    @app.patch("/api/intakes/{intake_id}/draft", response_model=IntakeView)
+    @app.patch("/api/v1/intakes/{intake_id}/draft", response_model=IntakeView)
     async def update_intake_draft(
+
         intake_id: str,
         request: IntakeDraftUpdate,
         service: IntakeService = Depends(get_intake_service),
     ) -> IntakeView:
         return service.update_draft(intake_id, request)
 
-    @app.post("/api/intakes/{intake_id}/confirm", response_model=IntakeView)
+    @app.post("/api/v1/intakes/{intake_id}/confirm", response_model=IntakeView)
     async def confirm_intake(
+
         intake_id: str,
         request: IntakeConfirmRequest,
         service: IntakeService = Depends(get_intake_service),
@@ -570,11 +609,12 @@ def create_app(
         return service.confirm(intake_id, request)
 
     @app.post(
-        "/api/intakes/{intake_id}/runs",
+        "/api/v1/intakes/{intake_id}/runs",
         response_model=IntakeRunAccepted,
         status_code=202,
     )
     async def start_intake_run(
+
         intake_id: str,
         request: IntakeRunRequest,
         intake_service: IntakeService = Depends(get_intake_service),
@@ -590,9 +630,9 @@ def create_app(
                 incident_id=run_view.incident_id,
                 status=run_view.status,
                 events_url=(
-                    f"/api/orchestration/runs/{run_view.run_id}/events"
+                    f"/api/v1/orchestration/runs/{run_view.run_id}/events"
                 ),
-                result_url=f"/api/orchestration/runs/{run_view.run_id}",
+                result_url=f"/api/v1/orchestration/runs/{run_view.run_id}",
             )
             return IntakeRunAccepted(intake=view, run=accepted)
         if view.status != IntakeStatus.ready or view.incident_id is None:
@@ -616,26 +656,31 @@ def create_app(
         )
         return IntakeRunAccepted(intake=linked, run=accepted)
 
-    @app.get("/api/incidents/demo", response_model=RecallIncidentInput)
-    async def get_demo_incident() -> RecallIncidentInput:
+    @app.get("/api/v1/incidents/demo", response_model=RecallIncidentInput, include_in_schema=False)
+    async def get_demo_incident(
+) -> RecallIncidentInput:
         return build_demo_incident()
 
-    @app.post("/api/incidents/demo/analyze", response_model=RecallAnalysis)
-    async def analyze_demo_incident() -> RecallAnalysis:
+    @app.post("/api/v1/incidents/demo/analyze", response_model=RecallAnalysis, include_in_schema=False)
+    async def analyze_demo_incident(
+) -> RecallAnalysis:
         return analyze_recall_incident(build_demo_incident())
 
-    @app.get("/api/agents", response_model=list[AgentDescriptor])
+    @app.get("/api/v1/agents", response_model=list[AgentDescriptor], include_in_schema=False)
     async def list_agents(
+
         orchestrator: Orchestrator = Depends(get_orchestrator),
     ) -> list[AgentDescriptor]:
         return [AgentDescriptor(**descriptor) for descriptor in orchestrator.descriptors()]
 
     @app.post(
-        "/api/incidents/demo/runs",
+        "/api/v1/incidents/demo/runs",
         response_model=OrchestrationRunAccepted,
         status_code=202,
+        include_in_schema=False,
     )
     async def start_demo_run(
+
         request: OrchestrationStartRequest,
         service: OrchestrationService = Depends(get_orchestration_service),
     ) -> OrchestrationRunAccepted:
@@ -646,17 +691,20 @@ def create_app(
         )
 
     @app.get(
-        "/api/orchestration/runs/{run_id}",
+        "/api/v1/orchestration/runs/{run_id}",
         response_model=OrchestrationRunView,
+        include_in_schema=False,
     )
     async def get_orchestration_run(
+
         run_id: str,
         service: OrchestrationService = Depends(get_orchestration_service),
     ) -> OrchestrationRunView:
         return service.get(run_id)
 
-    @app.get("/api/orchestration/runs/{run_id}/events")
+    @app.get("/api/v1/orchestration/runs/{run_id}/events", include_in_schema=False)
     async def stream_orchestration_run(
+
         run_id: str,
         request: Request,
         after: int | None = None,
@@ -678,8 +726,9 @@ def create_app(
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
-    @app.post("/api/incidents/demo/run", response_model=OrchestrationResult)
+    @app.post("/api/v1/incidents/demo/run", response_model=OrchestrationResult, include_in_schema=False)
     async def run_demo_orchestration(
+
         service: OrchestrationService = Depends(get_orchestration_service),
     ) -> OrchestrationResult:
         telemetry.increment("orchestration_runs")
@@ -689,8 +738,9 @@ def create_app(
         )
         return await service.wait_for_result(accepted.run_id)
 
-    @app.get("/api/incidents/demo/run/stream", deprecated=True)
+    @app.get("/api/v1/incidents/demo/run/stream", deprecated=True, include_in_schema=False)
     async def stream_demo_orchestration(
+
         service: OrchestrationService = Depends(get_orchestration_service),
     ) -> StreamingResponse:
         telemetry.increment("orchestration_streams")
@@ -704,14 +754,16 @@ def create_app(
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
-    @app.get("/api/memory", response_model=list[MemoryRecord])
+    @app.get("/api/v1/memory", response_model=list[MemoryRecord], include_in_schema=False)
     async def list_memory(
+
         memory_repo: MemoryRepository = Depends(get_memory),
     ) -> list[MemoryRecord]:
         return memory_repo.list_records()
 
-    @app.post("/api/briefing/demo", response_model=ManagementBriefing)
+    @app.post("/api/v1/briefing/demo", response_model=ManagementBriefing, include_in_schema=False)
     async def demo_briefing(
+
         gateway: QwenGateway = Depends(get_qwen_gateway),
     ) -> ManagementBriefing:
         incident = build_demo_incident()
@@ -719,16 +771,19 @@ def create_app(
         outcome = await generate_briefing(gateway, incident, analysis)
         return outcome.value
 
-    @app.get("/api/telemetry")
-    async def telemetry_snapshot() -> dict[str, Any]:
+    @app.get("/api/v1/telemetry", include_in_schema=False)
+    async def telemetry_snapshot(
+) -> dict[str, Any]:
         return {"counters": telemetry.snapshot()}
 
-    @app.get("/api/qwen/status", response_model=ProviderStatus)
-    async def qwen_status(gateway: QwenGateway = Depends(get_qwen_gateway)) -> ProviderStatus:
+    @app.get("/api/v1/qwen/status", response_model=ProviderStatus, include_in_schema=False)
+    async def qwen_status(
+gateway: QwenGateway = Depends(get_qwen_gateway)) -> ProviderStatus:
         return gateway.status()
 
-    @app.post("/api/qwen/verify", response_model=QwenVerificationReceipt)
+    @app.post("/api/v1/qwen/verify", response_model=QwenVerificationReceipt, include_in_schema=False)
     async def verify_qwen(
+
         request: Request,
         gateway: QwenGateway = Depends(get_qwen_gateway),
     ) -> QwenVerificationReceipt | JSONResponse:
@@ -757,8 +812,9 @@ def create_app(
         telemetry.increment("qwen_verifications")
         return receipt
 
-    @app.get("/api/qwen/proof", response_model=QwenVerificationReceipt)
-    async def qwen_proof() -> QwenVerificationReceipt | JSONResponse:
+    @app.get("/api/v1/qwen/proof", response_model=QwenVerificationReceipt, include_in_schema=False)
+    async def qwen_proof(
+) -> QwenVerificationReceipt | JSONResponse:
         receipt = verification_store.latest()
         if receipt is None:
             return JSONResponse(
@@ -770,8 +826,9 @@ def create_app(
             )
         return receipt
 
-    @app.post("/api/qwen/recall-summary", response_model=ModelJSONResponse)
+    @app.post("/api/v1/qwen/recall-summary", response_model=ModelJSONResponse, include_in_schema=False)
     async def qwen_recall_summary(
+
         gateway: QwenGateway = Depends(get_qwen_gateway),
     ) -> ModelJSONResponse:
         incident = build_demo_incident()
@@ -795,8 +852,9 @@ def create_app(
             )
         )
 
-    @app.post("/api/notices/customer-draft", response_model=CustomerNoticeDraft)
+    @app.post("/api/v1/notices/customer-draft", response_model=CustomerNoticeDraft, include_in_schema=False)
     async def customer_notice_draft(
+
         request: CustomerNoticeRequest | None = None,
     ) -> CustomerNoticeDraft:
         incident = build_demo_incident()
@@ -805,15 +863,18 @@ def create_app(
             affected_items = analyze_recall_incident(incident).affected_items
         return build_customer_notice(incident, affected_items=affected_items)
 
-    @app.get("/api/evidence/demo-packet", response_model=EvidencePacket)
-    async def demo_evidence_packet() -> EvidencePacket:
+    @app.get("/api/v1/evidence/demo-packet", response_model=EvidencePacket, include_in_schema=False)
+    async def demo_evidence_packet(
+) -> EvidencePacket:
         return _build_demo_evidence_packet()
 
     @app.get(
-        "/api/evidence/demo-packet.md",
+        "/api/v1/evidence/demo-packet.md",
         response_class=PlainTextResponse,
+        include_in_schema=False,
     )
-    async def download_demo_evidence_packet() -> PlainTextResponse:
+    async def download_demo_evidence_packet(
+) -> PlainTextResponse:
         packet = _build_demo_evidence_packet()
         return PlainTextResponse(
             packet.markdown,
@@ -823,7 +884,7 @@ def create_app(
             },
         )
 
-    @app.get("/api/evidence/demo-review", response_model=EvidenceReviewState)
+    @app.get("/api/v1/evidence/demo-review", response_model=EvidenceReviewState, include_in_schema=False)
     def demo_evidence_review(
         service: ReviewService = Depends(get_review_service),
     ) -> EvidenceReviewState:
@@ -835,8 +896,9 @@ def create_app(
         )
 
     @app.post(
-        "/api/evidence/demo-review/decision",
+        "/api/v1/evidence/demo-review/decision",
         response_model=EvidenceReviewState,
+        include_in_schema=False,
     )
     def demo_evidence_review_decision(
         request: ReviewDecisionRequest,
@@ -850,8 +912,9 @@ def create_app(
             request=request,
         )
 
-    @app.get("/api/inspections/demo", response_model=ShelfInspectionResult)
+    @app.get("/api/v1/inspections/demo", response_model=ShelfInspectionResult, include_in_schema=False)
     async def demo_shelf_inspection(
+
         gateway: QwenGateway = Depends(get_qwen_gateway),
     ) -> ShelfInspectionResult:
         return await inspection.inspect_image(
@@ -863,8 +926,9 @@ def create_app(
             allow_seeded_fallback=True,
         )
 
-    @app.post("/api/inspections/shelf-photo", response_model=ShelfInspectionResult)
+    @app.post("/api/v1/inspections/shelf-photo", response_model=ShelfInspectionResult, include_in_schema=False)
     async def inspect_shelf_photo(
+
         file: UploadFile = File(...),
         gateway: QwenGateway = Depends(get_qwen_gateway),
         settings: Settings = Depends(get_request_settings),

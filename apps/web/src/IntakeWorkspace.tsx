@@ -410,15 +410,16 @@ function ReviewStage({
           />
         </div>
 
-        <div className="intake-table-wrap">
-          <table className="intake-table">
+        <div className="table-wrap">
+          <table className="intake-table" aria-labelledby="inventory-title">
+            <caption className="sr-only">Validated inventory rows from uploaded CSV</caption>
             <thead>
               <tr>
-                <th>Store</th>
-                <th>Product</th>
-                <th>Lot</th>
-                <th>On hand</th>
-                <th>Location</th>
+                <th scope="col">Store</th>
+                <th scope="col">Product</th>
+                <th scope="col">Lot</th>
+                <th scope="col">On hand</th>
+                <th scope="col">Location</th>
               </tr>
             </thead>
             <tbody>

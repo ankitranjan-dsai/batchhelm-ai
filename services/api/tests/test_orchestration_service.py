@@ -8,8 +8,7 @@ from batchhelm_api.agents.base import Agent, AgentContext, AgentOutput
 from batchhelm_api.intake_models import (
     IntakeArtifact,
     IntakeArtifactRole,
-    ResolvedRunInput,
-)
+    ResolvedRunInput)
 from batchhelm_api.memory_repository import InMemoryMemoryRepository
 from batchhelm_api.models import AgentRunStatus
 from batchhelm_api.orchestration_repository import SQLiteOrchestrationRepository
@@ -35,8 +34,7 @@ def shelf_artifact() -> IntakeArtifact:
         size_bytes=len(PNG),
         sha256="a" * 64,
         relative_path="intakes/intake-1/shelf-1.png",
-        created_at="2026-07-04T08:00:00+00:00",
-    )
+        created_at="2026-07-04T08:00:00+00:00")
 
 
 def make_service(path: Path) -> OrchestrationService:
@@ -44,35 +42,28 @@ def make_service(path: Path) -> OrchestrationService:
     repository.initialize()
     settings = make_settings(
         ORCHESTRATION_DATABASE_PATH=path,
-        QWEN_MAX_RETRIES=1,
-    )
+        QWEN_MAX_RETRIES=1)
     memory = InMemoryMemoryRepository()
     return OrchestrationService(
         repository=repository,
         orchestrator_factory=lambda: Orchestrator(
             gateway=fallback_gateway(),
             memory=memory,
-            settings=settings,
-        ),
-    )
+            settings=settings))
 
 
 async def test_identical_start_requests_share_one_run_and_worker(
-    tmp_path: Path,
-) -> None:
+    tmp_path: Path) -> None:
     service = make_service(tmp_path / "orchestration.db")
     incident = build_demo_incident()
 
     first, second = await asyncio.gather(
         service.start(
             ResolvedRunInput(incident=incident),
-            request_id="request-1",
-        ),
+            request_id="request-1"),
         service.start(
             ResolvedRunInput(incident=incident),
-            request_id="request-1",
-        ),
-    )
+            request_id="request-1"))
     result = await service.wait_for_result(first.run_id)
 
     assert first.run_id == second.run_id
@@ -84,8 +75,7 @@ async def test_stream_replays_only_events_after_cursor(tmp_path: Path) -> None:
     service = make_service(tmp_path / "orchestration.db")
     accepted = await service.start(
         resolved_demo(),
-        request_id="request-1",
-    )
+        request_id="request-1")
     await service.wait_for_result(accepted.run_id)
 
     frames = [frame async for frame in service.stream(accepted.run_id, after=2)]
@@ -107,8 +97,7 @@ async def test_recover_restarts_a_persisted_incomplete_run(tmp_path: Path) -> No
         run_id="run-1",
         incident_id=build_demo_incident().id,
         idempotency_key="request-1",
-        provider_mode="demo-fallback",
-    )
+        provider_mode="demo-fallback")
     first.repository.claim_run(run.id, "2026-06-30T09:00:00+00:00")
 
     restarted = make_service(path)
@@ -128,8 +117,7 @@ async def test_closing_subscriber_does_not_cancel_worker(tmp_path: Path) -> None
     service = make_service(tmp_path / "orchestration.db")
     accepted = await service.start(
         resolved_demo(),
-        request_id="request-1",
-    )
+        request_id="request-1")
     stream = service.stream(accepted.run_id, after=0)
     await anext(stream)
     await stream.aclose()
@@ -154,22 +142,18 @@ async def test_failed_agent_result_keeps_failed_run_status(tmp_path: Path) -> No
     repository.initialize()
     settings = make_settings(
         ORCHESTRATION_DATABASE_PATH=path,
-        QWEN_MAX_RETRIES=1,
-    )
+        QWEN_MAX_RETRIES=1)
     service = OrchestrationService(
         repository=repository,
         orchestrator_factory=lambda: Orchestrator(
             gateway=fallback_gateway(),
             memory=InMemoryMemoryRepository(),
             settings=settings,
-            agents=[_FailingAgent()],
-        ),
-    )
+            agents=[_FailingAgent()]))
 
     accepted = await service.start(
         resolved_demo(),
-        request_id="request-failure",
-    )
+        request_id="request-failure")
     result = await service.wait_for_result(accepted.run_id)
 
     assert result.status == AgentRunStatus.failed
@@ -181,17 +165,14 @@ class _CapturingOrchestrator(Orchestrator):
         self,
         *,
         captured: list[tuple[bytes | None, str | None, str | None]],
-        path: Path,
-    ) -> None:
+        path: Path) -> None:
         settings = make_settings(
             ORCHESTRATION_DATABASE_PATH=path,
-            QWEN_MAX_RETRIES=1,
-        )
+            QWEN_MAX_RETRIES=1)
         super().__init__(
             gateway=fallback_gateway(),
             memory=InMemoryMemoryRepository(),
-            settings=settings,
-        )
+            settings=settings)
         self._captured = captured
 
     async def run(self, incident, **kwargs):  # type: ignore[no-untyped-def]
@@ -200,15 +181,13 @@ class _CapturingOrchestrator(Orchestrator):
             (
                 kwargs.get("shelf_image_bytes"),
                 kwargs.get("shelf_image_media_type"),
-                upload.original_filename if upload is not None else None,
-            )
+                upload.original_filename if upload is not None else None)
         )
         return await super().run(incident, **kwargs)
 
 
 async def test_start_passes_real_shelf_artifact_to_orchestrator(
-    tmp_path: Path,
-) -> None:
+    tmp_path: Path) -> None:
     path = tmp_path / "orchestration.db"
     repository = SQLiteOrchestrationRepository(path)
     repository.initialize()
@@ -217,17 +196,14 @@ async def test_start_passes_real_shelf_artifact_to_orchestrator(
         repository=repository,
         orchestrator_factory=lambda: _CapturingOrchestrator(
             captured=captured,
-            path=path,
-        ),
-    )
+            path=path))
     run_input = ResolvedRunInput(
         incident=build_demo_incident().model_copy(
             update={"id": "incident-custom"}
         ),
         shelf_artifact=shelf_artifact(),
         shelf_image_bytes=PNG,
-        shelf_image_media_type="image/png",
-    )
+        shelf_image_media_type="image/png")
 
     accepted = await service.start(run_input, request_id="request-1")
     await service.wait_for_result(accepted.run_id)
@@ -236,16 +212,14 @@ async def test_start_passes_real_shelf_artifact_to_orchestrator(
 
 
 async def test_restart_resolves_non_demo_incident_by_id(
-    tmp_path: Path,
-) -> None:
+    tmp_path: Path) -> None:
     path = tmp_path / "orchestration.db"
     first = make_service(path)
     first.repository.create_run(
         run_id="run-custom",
         incident_id="incident-custom",
         idempotency_key="request-custom",
-        provider_mode="demo-fallback",
-    )
+        provider_mode="demo-fallback")
     restarted_repository = SQLiteOrchestrationRepository(path)
     restarted_repository.initialize()
     captured: list[tuple[bytes | None, str | None, str | None]] = []
@@ -253,9 +227,7 @@ async def test_restart_resolves_non_demo_incident_by_id(
         repository=restarted_repository,
         orchestrator_factory=lambda: _CapturingOrchestrator(
             captured=captured,
-            path=path,
-        ),
-    )
+            path=path))
     calls: list[str] = []
     custom = ResolvedRunInput(
         incident=build_demo_incident().model_copy(
@@ -263,8 +235,7 @@ async def test_restart_resolves_non_demo_incident_by_id(
         ),
         shelf_artifact=shelf_artifact(),
         shelf_image_bytes=PNG,
-        shelf_image_media_type="image/png",
-    )
+        shelf_image_media_type="image/png")
 
     def resolver(incident_id: str) -> ResolvedRunInput | None:
         calls.append(incident_id)

@@ -7,7 +7,7 @@ from typing import Protocol
 
 from batchhelm_api.models import QwenVerificationReceipt
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class QwenVerificationStoreUnavailable(RuntimeError):
@@ -61,8 +61,26 @@ class SQLiteQwenVerificationRepository:
                                 provider TEXT NOT NULL,
                                 verified INTEGER NOT NULL CHECK (verified = 1),
                                 model TEXT NOT NULL,
-                                base_url TEXT NOT NULL,
-                                provider_request_id TEXT,
+                                latency_ms INTEGER NOT NULL CHECK (latency_ms >= 0),
+                                response_sha256 TEXT NOT NULL CHECK (
+                                    length(response_sha256) = 64
+                                ),
+                                verified_at TEXT NOT NULL
+                            )
+                            """
+                        )
+                        connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+                    elif version < SCHEMA_VERSION:
+                        connection.execute(
+                            "DROP TABLE IF EXISTS qwen_verification_receipts"
+                        )
+                        connection.execute(
+                            """
+                            CREATE TABLE qwen_verification_receipts (
+                                sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                                provider TEXT NOT NULL,
+                                verified INTEGER NOT NULL CHECK (verified = 1),
+                                model TEXT NOT NULL,
                                 latency_ms INTEGER NOT NULL CHECK (latency_ms >= 0),
                                 response_sha256 TEXT NOT NULL CHECK (
                                     length(response_sha256) = 64
@@ -89,19 +107,15 @@ class SQLiteQwenVerificationRepository:
                             provider,
                             verified,
                             model,
-                            base_url,
-                            provider_request_id,
                             latency_ms,
                             response_sha256,
                             verified_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?)
                         """,
                         (
                             receipt.provider,
                             int(receipt.verified),
                             receipt.model,
-                            receipt.base_url,
-                            receipt.provider_request_id,
                             receipt.latency_ms,
                             receipt.response_sha256,
                             receipt.verified_at,
@@ -121,8 +135,6 @@ class SQLiteQwenVerificationRepository:
                         provider,
                         verified,
                         model,
-                        base_url,
-                        provider_request_id,
                         latency_ms,
                         response_sha256,
                         verified_at
@@ -142,12 +154,6 @@ class SQLiteQwenVerificationRepository:
             provider=str(row["provider"]),
             verified=bool(row["verified"]),
             model=str(row["model"]),
-            base_url=str(row["base_url"]),
-            provider_request_id=(
-                str(row["provider_request_id"])
-                if row["provider_request_id"] is not None
-                else None
-            ),
             latency_ms=int(row["latency_ms"]),
             response_sha256=str(row["response_sha256"]),
             verified_at=str(row["verified_at"]),

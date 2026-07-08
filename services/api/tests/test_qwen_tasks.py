@@ -25,8 +25,7 @@ async def test_extract_recall_uses_live_qwen_output() -> None:
             "risk_level": "critical",
             "urgency": "Remove now",
             "summary": "Contamination risk",
-            "confidence": 94,
-        }
+            "confidence": 94}
     )
 
     outcome = await qwen_tasks.extract_recall(gateway, build_demo_incident())
@@ -66,8 +65,7 @@ async def test_draft_customer_notice_live() -> None:
             "subject": "Recall notice",
             "body": "Please return the product.",
             "audience": "All customers",
-            "confidence": 80,
-        }
+            "confidence": 80}
     )
 
     outcome = await qwen_tasks.draft_customer_notice(gateway, build_demo_incident(), 23)

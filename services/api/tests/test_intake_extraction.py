@@ -9,14 +9,12 @@ from batchhelm_api.intake_extraction import (
     IntakeCompilationError,
     compile_incident_snapshot,
     extract_notice_draft,
-    safe_literal_extraction,
-)
+    safe_literal_extraction)
 from batchhelm_api.intake_models import (
     IntakeArtifact,
     IntakeArtifactRole,
     RecallCriteriaDraft,
-    RecallIncidentDraft,
-)
+    RecallIncidentDraft)
 from batchhelm_api.inventory_parser import parse_inventory_csv
 from batchhelm_api.models import (
     IncidentStatus,
@@ -24,13 +22,11 @@ from batchhelm_api.models import (
     ModelJSONRequest,
     ModelJSONResponse,
     OutputSource,
-    Severity,
-)
+    Severity)
 from batchhelm_api.notice_parser import (
     NoticeTextPage,
     ParsedNotice,
-    RenderedNoticePage,
-)
+    RenderedNoticePage)
 from batchhelm_api.qwen import QwenGateway
 from tests.conftest import fallback_gateway, make_settings, scripted_gateway
 
@@ -53,16 +49,14 @@ class SequenceGateway(QwenGateway):
 
     async def complete_image_json(
         self,
-        request: ModelImageJSONRequest,
-    ) -> ModelJSONResponse:
+        request: ModelImageJSONRequest) -> ModelJSONResponse:
         response = self.image_responses[self.image_calls]
         self.image_calls += 1
         return ModelJSONResponse(
             provider="qwen",
             model=self.settings.qwen_vision_model,
             used_fallback=False,
-            content=response,
-        )
+            content=response)
 
 
 def notice_artifact() -> IntakeArtifact:
@@ -76,8 +70,7 @@ def notice_artifact() -> IntakeArtifact:
         size_bytes=100,
         sha256="a" * 64,
         relative_path="intakes/intake-1/notice-1.pdf",
-        created_at="2026-07-04T08:00:00+00:00",
-    )
+        created_at="2026-07-04T08:00:00+00:00")
 
 
 def parsed_text_notice(text: str = NOTICE) -> ParsedNotice:
@@ -86,29 +79,24 @@ def parsed_text_notice(text: str = NOTICE) -> ParsedNotice:
         page_count=1,
         text_pages=(NoticeTextPage(locator="page 1", text=text),),
         rendered_pages=(),
-        warnings=(),
-    )
+        warnings=())
 
 
 def structured_extraction(
     *,
     product: str = "Spinach 10 oz",
-    confidence: int = 94,
-) -> dict[str, object]:
+    confidence: int = 94) -> dict[str, object]:
     return {
         "product_name": {"value": product, "confidence": confidence},
         "affected_lots": {
             "value": ["L2418", "L2419"],
-            "confidence": confidence,
-        },
+            "confidence": confidence},
         "upcs": {"value": ["008500001010"], "confidence": confidence},
         "risk_level": {"value": "high", "confidence": confidence},
         "reason": {
             "value": "Possible contamination",
-            "confidence": confidence,
-        },
-        "source": {"value": "Central Farms", "confidence": confidence},
-    }
+            "confidence": confidence},
+        "source": {"value": "Central Farms", "confidence": confidence}}
 
 
 def valid_draft() -> RecallIncidentDraft:
@@ -124,14 +112,12 @@ def valid_draft() -> RecallIncidentDraft:
             upcs=["008500001010"],
             risk_level=Severity.high,
             reason="Possible contamination",
-            source="Central Farms alert",
-        ),
+            source="Central Farms alert"),
         notice_text=NOTICE,
         inventory=list(inventory.rows),
         stores=["Store B", "Store A", "Store A"],
         import_summary=inventory.summary,
-        review_required=False,
-    )
+        review_required=False)
 
 
 @pytest.mark.asyncio
@@ -139,8 +125,7 @@ async def test_qwen_text_extraction_returns_field_evidence() -> None:
     result = await extract_notice_draft(
         gateway=scripted_gateway(structured_extraction()),
         parsed_notice=parsed_text_notice(),
-        notice_artifact=notice_artifact(),
-    )
+        notice_artifact=notice_artifact())
 
     assert result.criteria.product_name == "Spinach 10 oz"
     assert result.criteria.affected_lots == ["L2418", "L2419"]
@@ -154,8 +139,7 @@ async def test_unavailable_qwen_returns_literal_review_draft() -> None:
     result = await extract_notice_draft(
         gateway=fallback_gateway(),
         parsed_notice=parsed_text_notice(),
-        notice_artifact=notice_artifact(),
-    )
+        notice_artifact=notice_artifact())
 
     assert result.review_required is True
     assert result.criteria.affected_lots == ["L2418", "L2419"]
@@ -169,14 +153,12 @@ async def test_hallucinated_text_values_are_discarded() -> None:
     response = structured_extraction(product="Kale")
     response["affected_lots"] = {
         "value": ["L2418", "X9999"],
-        "confidence": 99,
-    }
+        "confidence": 99}
 
     result = await extract_notice_draft(
         gateway=scripted_gateway(response),
         parsed_notice=parsed_text_notice(),
-        notice_artifact=notice_artifact(),
-    )
+        notice_artifact=notice_artifact())
 
     assert result.criteria.product_name == "Spinach 10 oz"
     assert "X9999" not in result.criteria.affected_lots
@@ -195,16 +177,13 @@ async def test_high_confidence_image_extraction_stops_after_first_page() -> None
         text_pages=(),
         rendered_pages=(
             RenderedNoticePage(locator="page 1", png_bytes=b"page-one"),
-            RenderedNoticePage(locator="page 2", png_bytes=b"page-two"),
-        ),
-        warnings=(),
-    )
+            RenderedNoticePage(locator="page 2", png_bytes=b"page-two")),
+        warnings=())
 
     result = await extract_notice_draft(
         gateway=gateway,
         parsed_notice=parsed,
-        notice_artifact=notice_artifact(),
-    )
+        notice_artifact=notice_artifact())
 
     assert gateway.image_calls == 1
     assert result.criteria.product_name == "Spinach 10 oz"
@@ -225,16 +204,13 @@ async def test_conflicting_image_pages_require_review() -> None:
         text_pages=(),
         rendered_pages=(
             RenderedNoticePage(locator="page 1", png_bytes=b"page-one"),
-            RenderedNoticePage(locator="page 2", png_bytes=b"page-two"),
-        ),
-        warnings=(),
-    )
+            RenderedNoticePage(locator="page 2", png_bytes=b"page-two")),
+        warnings=())
 
     result = await extract_notice_draft(
         gateway=gateway,
         parsed_notice=parsed,
-        notice_artifact=notice_artifact(),
-    )
+        notice_artifact=notice_artifact())
 
     product_evidence = [
         item
@@ -288,8 +264,7 @@ def test_compiler_requires_confirmed_criteria_and_inventory() -> None:
     snapshot = compile_incident_snapshot(
         "intake-1",
         valid_draft(),
-        now=datetime(2026, 7, 4, 8, 30, tzinfo=timezone.utc),
-    )
+        now=datetime(2026, 7, 4, 8, 30, tzinfo=timezone.utc))
 
     assert snapshot.id.startswith("intake-intake-1-")
     assert snapshot.status == IncidentStatus.active
@@ -314,21 +289,17 @@ def test_compiler_identity_is_stable_for_same_intake() -> None:
         (
             lambda draft: (
                 setattr(draft.criteria, "affected_lots", []),
-                setattr(draft.criteria, "upcs", []),
-            ),
-            "lot or UPC",
-        ),
+                setattr(draft.criteria, "upcs", [])),
+            "lot or UPC"),
         (lambda draft: setattr(draft.criteria, "risk_level", None), "risk"),
         (lambda draft: setattr(draft.criteria, "reason", ""), "reason"),
         (lambda draft: setattr(draft.criteria, "source", ""), "source"),
         (lambda draft: setattr(draft, "notice_text", ""), "notice"),
         (lambda draft: setattr(draft, "inventory", []), "inventory"),
-    ],
-)
+    ])
 def test_compiler_rejects_incomplete_snapshot(
     mutation: Callable[[RecallIncidentDraft], object],
-    message: str,
-) -> None:
+    message: str) -> None:
     draft = valid_draft()
     mutation(draft)
 

@@ -20,6 +20,7 @@ import {
   Mail,
   MoreHorizontal,
   PackageCheck,
+  Printer,
   ScanLine,
   Search,
   Settings,
@@ -27,7 +28,14 @@ import {
   UserRound,
   Warehouse,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import {
   evidencePacketDownloadUrl,
   fetchDashboardSync,
@@ -72,16 +80,24 @@ import type {
 } from "./types";
 
 const navItems = [
-  { label: "Recalls", icon: AlertTriangle },
-  { label: "Inventory", icon: Warehouse },
-  { label: "Tasks", icon: ClipboardCheck },
-  { label: "Evidence", icon: FileText },
-  { label: "Memory", icon: Brain },
+  { label: "Recalls", icon: AlertTriangle, section: "section-recalls" },
+  { label: "Inventory", icon: Warehouse, section: "section-inventory" },
+  { label: "Tasks", icon: ClipboardCheck, section: "section-tasks" },
+  { label: "Evidence", icon: FileText, section: "section-evidence" },
+  { label: "Memory", icon: Brain, section: "section-memory" },
 ];
 
+const helpUrl = "https://github.com/ankitranjan-dsai/batchhelm-ai#readme";
+
 type StoreFilter = "all" | "Store A" | "Store B";
+type StatusFilter = "all" | InventoryRow["status"];
+type EvidenceView = "review" | "packet";
 type InspectionState = "idle" | "loading" | "ready" | "error";
 type PacketState = "idle" | "loading" | "ready" | "error";
+
+function scrollToSection(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 
 export function App() {
   const orchestrationController = useOrchestrationRun();
@@ -91,9 +107,13 @@ export function App() {
     onRunAccepted: orchestrationController.adoptRun,
   });
   const [activeNav, setActiveNav] = useState("Recalls");
+  const [searchQuery, setSearchQuery] = useState("");
   const [storeFilter, setStoreFilter] = useState<StoreFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [evidenceView, setEvidenceView] = useState<EvidenceView>("review");
   const [incident, setIncident] = useState<RecallIncident>(demoIncident);
   const [tasks, setTasks] = useState<StaffTask[]>(demoIncident.tasks);
+  const shelfInputRef = useRef<HTMLInputElement>(null);
   const [provider, setProvider] = useState<ProviderStatus | null>(null);
   const [providerProof, setProviderProof] =
     useState<QwenVerificationReceipt | null>(null);
@@ -144,12 +164,34 @@ export function App() {
   }, [orchestration.result]);
 
   const filteredInventory = useMemo(() => {
-    if (storeFilter === "all") {
-      return incident.inventory;
-    }
+    const query = searchQuery.trim().toLowerCase();
+    return incident.inventory.filter((row) => {
+      if (storeFilter !== "all" && row.store !== storeFilter) {
+        return false;
+      }
+      if (statusFilter !== "all" && row.status !== statusFilter) {
+        return false;
+      }
+      if (!query) {
+        return true;
+      }
+      return [row.store, row.sku, row.product, row.lot, row.location, row.status].some(
+        (value) => value.toLowerCase().includes(query),
+      );
+    });
+  }, [incident.inventory, storeFilter, statusFilter, searchQuery]);
 
-    return incident.inventory.filter((row) => row.store === storeFilter);
-  }, [incident.inventory, storeFilter]);
+  const visibleTasks = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return tasks;
+    }
+    return tasks.filter((task) =>
+      [task.title, task.store, task.assignee, task.priority, task.status].some(
+        (value) => value.toLowerCase().includes(query),
+      ),
+    );
+  }, [tasks, searchQuery]);
 
   const openTaskCount = tasks.filter((task) => task.status !== "complete").length;
   const evidenceProgress = getEvidenceProgress(incident.evidence);
@@ -171,55 +213,133 @@ export function App() {
     );
   }
 
+  function assignOpenTasksToMe() {
+    setTasks((currentTasks) =>
+      currentTasks.map((task) =>
+        task.status === "complete"
+          ? task
+          : { ...task, assignee: "Operations Manager", initials: "OM" },
+      ),
+    );
+  }
+
+  function handleNavSelect(label: string) {
+    setActiveNav(label);
+    const section = navItems.find((item) => item.label === label)?.section;
+    if (section) {
+      scrollToSection(section);
+    }
+  }
+
+  function openEvidenceView(view: EvidenceView) {
+    setEvidenceView(view);
+    scrollToSection("section-evidence");
+  }
+
+  function openScanner() {
+    scrollToSection("section-inspection");
+    shelfInputRef.current?.click();
+  }
+
+  function exportInventoryCsv() {
+    const header = [
+      "Store",
+      "SKU",
+      "Product",
+      "Lot",
+      "On Hand",
+      "Quarantined",
+      "Confidence",
+      "Status",
+      "Location",
+    ];
+    const rows = filteredInventory.map((row) => [
+      row.store,
+      row.sku,
+      row.product,
+      row.lot,
+      String(row.onHand),
+      String(row.quarantined),
+      `${row.confidence}%`,
+      row.status,
+      row.location,
+    ]);
+    const csv = [header, ...rows]
+      .map((line) => line.map(csvCell).join(","))
+      .join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `batchhelm-inventory-${incident.id}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function loadDemoInspection() {
     setInspectionState("loading");
     setInspectionError("");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      const result = await fetchDemoInspection();
+      const result = await fetchDemoInspection(controller.signal);
       setInspection(result);
       setInspectionState("ready");
     } catch {
       setInspectionState("error");
-      setInspectionError("Inspection service is unavailable.");
+      setInspectionError("Inspection service is unavailable or timed out.");
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
   async function inspectShelfPhoto(file: File) {
     setInspectionState("loading");
     setInspectionError("");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
     try {
-      const result = await uploadShelfPhoto(file);
+      const result = await uploadShelfPhoto(file, controller.signal);
       setInspection(result);
       setInspectionState("ready");
     } catch {
       setInspectionState("error");
-      setInspectionError("Upload failed. Use a JPEG, PNG, or WebP image under 8 MB.");
+      setInspectionError("Upload failed or timed out. Use a JPEG, PNG, or WebP image under 8 MB.");
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
   async function loadEvidencePacket() {
     setPacketState("loading");
     setPacketError("");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      const result = await fetchEvidencePacket();
+      const result = await fetchEvidencePacket(controller.signal);
       setPacket(result);
       setPacketState("ready");
     } catch {
       setPacketState("error");
-      setPacketError("Evidence packet service is unavailable.");
+      setPacketError("Evidence packet service is unavailable or timed out.");
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
   async function loadEvidenceReview() {
     setReviewState("loading");
     setReviewError("");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      const result = await fetchEvidenceReview();
+      const result = await fetchEvidenceReview(controller.signal);
       setReview(result);
       setReviewState("ready");
     } catch {
       setReviewState("error");
-      setReviewError("Evidence review service is unavailable.");
+      setReviewError("Evidence review service is unavailable or timed out.");
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
@@ -230,82 +350,115 @@ export function App() {
   async function handleReviewDecision(decision: ReviewDecision) {
     setReviewState("loading");
     setReviewError("");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      const result = await submitReviewDecision(decision);
+      const result = await submitReviewDecision(decision, controller.signal);
       setReview(result);
       setReviewState("ready");
     } catch {
       setReviewState("error");
-      setReviewError("Review decision could not be applied.");
+      setReviewError("Review decision could not be applied or timed out.");
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
   return (
-    <div className="app-shell">
-      <Sidebar
-        activeNav={activeNav}
-        openTaskCount={openTaskCount}
-        onSelect={setActiveNav}
-      />
-      <div className="workspace">
-        <TopBar
-          incident={incident}
-          provider={provider}
-          providerProof={providerProof}
-          providerEvidenceState={providerEvidenceState}
+    <>
+      <a href="#section-recalls" className="skip-link">
+        Skip to main content
+      </a>
+      <div className="app-shell">
+        <Sidebar
+          activeNav={activeNav}
+          openTaskCount={openTaskCount}
+          onSelect={handleNavSelect}
         />
-        <main className="dashboard" aria-label="Recall command center">
-          <section className="dashboard-grid">
-            <IncidentSummary
-              incident={incident}
-              onNewRecall={intakeController.open}
-            />
-            <aside className="right-rail" aria-label="Live intelligence panels">
-              <AgentPanel agents={incident.agents} />
-              <MemoryPanel insights={incident.insights} />
-            </aside>
-            <WorkflowTimeline workflow={incident.workflow} />
-            <AffectedInventory
-              inventory={filteredInventory}
-              storeFilter={storeFilter}
-              quarantinedTotal={quarantinedTotal}
-              onFilterChange={setStoreFilter}
-            />
-          </section>
-          <section aria-label="Agent mission control">
-            <MissionControl
-              session={orchestration}
-              onRerun={rerunOrchestration}
-            />
-          </section>
-          <section className="lower-grid" aria-label="Recall operations progress">
-            <TaskBoard tasks={tasks} onToggleTask={toggleTask} />
-            <EvidenceProgress
-              evidence={incident.evidence}
-              progress={evidenceProgress}
-              packet={packet}
-              packetState={packetState}
-              packetError={packetError}
-              review={review}
-              reviewState={reviewState}
-              reviewError={reviewError}
-              onRefresh={loadEvidenceWorkspace}
-              onReviewDecision={handleReviewDecision}
-            />
-            <ShelfInspectionPanel
-              inspection={inspection}
-              state={inspectionState}
-              error={inspectionError}
-              onDemo={loadDemoInspection}
-              onUpload={inspectShelfPhoto}
-            />
-            <Milestones milestones={incident.milestones} />
-          </section>
-          <MobileInspection incident={incident} />
-        </main>
+        <div className="workspace">
+          <TopBar
+            incident={incident}
+            provider={provider}
+            providerProof={providerProof}
+            providerEvidenceState={providerEvidenceState}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            openTaskCount={openTaskCount}
+            evidenceProgress={evidenceProgress}
+          />
+          <main className="dashboard" aria-label="Recall command center">
+            <section className="dashboard-grid">
+              <IncidentSummary
+                incident={incident}
+                onNewRecall={intakeController.open}
+                onQuarantine={() => scrollToSection("section-inventory")}
+                onCustomerNotice={() => openEvidenceView("review")}
+                onCompliancePacket={() => openEvidenceView("packet")}
+              />
+              <aside className="right-rail" aria-label="Live intelligence panels">
+                <AgentPanel agents={incident.agents} />
+                <MemoryPanel insights={incident.insights} />
+              </aside>
+              <WorkflowTimeline
+                workflow={incident.workflow}
+                onViewFull={() => scrollToSection("section-mission")}
+              />
+              <AffectedInventory
+                incident={incident}
+                inventory={filteredInventory}
+                storeFilter={storeFilter}
+                statusFilter={statusFilter}
+                quarantinedTotal={quarantinedTotal}
+                onFilterChange={setStoreFilter}
+                onStatusFilterChange={setStatusFilter}
+                onExport={exportInventoryCsv}
+              />
+            </section>
+            <section aria-label="Agent mission control" id="section-mission">
+              <MissionControl
+                session={orchestration}
+                onRerun={rerunOrchestration}
+              />
+            </section>
+            <section className="lower-grid" aria-label="Recall operations progress">
+              <TaskBoard
+                tasks={visibleTasks}
+                onToggleTask={toggleTask}
+                onAssignToMe={assignOpenTasksToMe}
+              />
+              <EvidenceProgress
+                evidence={incident.evidence}
+                progress={evidenceProgress}
+                packet={packet}
+                packetState={packetState}
+                packetError={packetError}
+                review={review}
+                reviewState={reviewState}
+                reviewError={reviewError}
+                activeView={evidenceView}
+                onViewChange={setEvidenceView}
+                onRefresh={loadEvidenceWorkspace}
+                onReviewDecision={handleReviewDecision}
+              />
+              <ShelfInspectionPanel
+                inspection={inspection}
+                state={inspectionState}
+                error={inspectionError}
+                inputRef={shelfInputRef}
+                onDemo={loadDemoInspection}
+                onUpload={inspectShelfPhoto}
+              />
+              <Milestones
+                milestones={incident.milestones}
+                onViewTimeline={() => scrollToSection("section-timeline")}
+              />
+            </section>
+            <MobileInspection incident={incident} onOpenScanner={openScanner} />
+          </main>
+        </div>
+        <IntakeWorkspace controller={intakeController} />
       </div>
-      <IntakeWorkspace controller={intakeController} />
-    </div>
+    </>
   );
 }
 
@@ -313,6 +466,7 @@ interface ShelfInspectionPanelProps {
   inspection: ShelfInspectionResult | null;
   state: InspectionState;
   error: string;
+  inputRef: React.Ref<HTMLInputElement>;
   onDemo: () => void;
   onUpload: (file: File) => void;
 }
@@ -321,11 +475,16 @@ function ShelfInspectionPanel({
   inspection,
   state,
   error,
+  inputRef,
   onDemo,
   onUpload,
 }: ShelfInspectionPanelProps) {
   return (
-    <section className="panel inspection-panel" aria-labelledby="inspection-title">
+    <section
+      className="panel inspection-panel"
+      aria-labelledby="inspection-title"
+      id="section-inspection"
+    >
       <div className="panel-header with-actions">
         <h2 id="inspection-title">Shelf Inspection</h2>
         <button type="button" className="utility-button" onClick={onDemo}>
@@ -342,6 +501,7 @@ function ShelfInspectionPanel({
           <input
             type="file"
             accept="image/jpeg,image/png,image/webp"
+            ref={inputRef}
             onChange={(event) => {
               const file = event.currentTarget.files?.[0];
               if (file) {
@@ -440,11 +600,21 @@ function Sidebar({ activeNav, openTaskCount, onSelect }: SidebarProps) {
             <span>All systems operational</span>
           </div>
         </div>
-        <button type="button" className="footer-link">
+        <a
+          className="footer-link"
+          href={helpUrl}
+          target="_blank"
+          rel="noreferrer"
+        >
           <HelpCircle size={20} />
           <span>Help & Support</span>
-        </button>
-        <button type="button" className="footer-link">
+        </a>
+        <button
+          type="button"
+          className="footer-link"
+          disabled
+          title="Settings are managed by your workspace admin in this pilot"
+        >
           <Settings size={20} />
           <span>Settings</span>
         </button>
@@ -458,12 +628,33 @@ function TopBar({
   provider,
   providerProof,
   providerEvidenceState,
+  searchQuery,
+  onSearchChange,
+  openTaskCount,
+  evidenceProgress,
 }: {
   incident: RecallIncident;
   provider: ProviderStatus | null;
   providerProof: QwenVerificationReceipt | null;
   providerEvidenceState: "loading" | ProviderProofState;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+  openTaskCount: number;
+  evidenceProgress: number;
 }) {
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function focusSearch(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", focusSearch);
+    return () => window.removeEventListener("keydown", focusSearch);
+  }, []);
+
   return (
     <header className="topbar">
       <label className="search-box">
@@ -472,6 +663,9 @@ function TopBar({
         <input
           type="search"
           placeholder="Search recalls, lots, stores, tasks, evidence..."
+          ref={searchRef}
+          value={searchQuery}
+          onChange={(event) => onSearchChange(event.currentTarget.value)}
         />
         <kbd>⌘K</kbd>
       </label>
@@ -486,17 +680,63 @@ function TopBar({
           <span>Incident Status</span>
           <strong>{incident.status.toUpperCase()}</strong>
         </div>
-        <button type="button" className="icon-button" aria-label="Notifications">
-          <Bell size={20} />
-        </button>
-        <button type="button" className="profile-button" aria-label="User profile">
-          <span className="avatar">OM</span>
-          <span className="profile-copy">
-            <strong>Operations Manager</strong>
-            <span>Central Foods Co.</span>
-          </span>
-          <ChevronDown size={16} />
-        </button>
+        <Dropdown
+          label="Notifications"
+          renderTrigger={(props) => (
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Notifications"
+              {...props}
+            >
+              <Bell size={20} />
+            </button>
+          )}
+        >
+          <div className="dropdown-note">
+            {openTaskCount > 0
+              ? `${openTaskCount} staff task${openTaskCount === 1 ? "" : "s"} still open.`
+              : "All staff tasks are complete."}
+          </div>
+          <div className="dropdown-note">
+            Evidence packet {evidenceProgress}% complete.
+          </div>
+          <div className="dropdown-note">
+            Incident {incident.id} is {incident.status}.
+          </div>
+        </Dropdown>
+        <Dropdown
+          label="User profile"
+          renderTrigger={(props) => (
+            <button
+              type="button"
+              className="profile-button"
+              aria-label="User profile"
+              {...props}
+            >
+              <span className="avatar">OM</span>
+              <span className="profile-copy">
+                <strong>Operations Manager</strong>
+                <span>Central Foods Co.</span>
+              </span>
+              <ChevronDown size={16} />
+            </button>
+          )}
+        >
+          <div className="dropdown-note">
+            Signed in as <strong>Operations Manager</strong> — reviewer of record
+            for this recall.
+          </div>
+          <a
+            className="dropdown-item"
+            href={helpUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <HelpCircle size={15} />
+            Help & Support
+          </a>
+        </Dropdown>
       </div>
     </header>
   );
@@ -505,12 +745,22 @@ function TopBar({
 function IncidentSummary({
   incident,
   onNewRecall,
+  onQuarantine,
+  onCustomerNotice,
+  onCompliancePacket,
 }: {
   incident: RecallIncident;
   onNewRecall: () => void;
+  onQuarantine: () => void;
+  onCustomerNotice: () => void;
+  onCompliancePacket: () => void;
 }) {
   return (
-    <section className="incident-card" aria-labelledby="incident-title">
+    <section
+      className="incident-card"
+      aria-labelledby="incident-title"
+      id="section-recalls"
+    >
       <div className="incident-alert">
         <AlertTriangle size={18} />
         <span>{incident.title.toUpperCase()}</span>
@@ -536,17 +786,17 @@ function IncidentSummary({
           <Shield size={18} />
           <span>Command Center</span>
         </button>
-        <button type="button" className="action-button">
+        <button type="button" className="action-button" onClick={onQuarantine}>
           <PackageCheck size={18} />
           <span>Quarantine</span>
           <em>In Progress</em>
         </button>
-        <button type="button" className="action-button">
+        <button type="button" className="action-button" onClick={onCustomerNotice}>
           <Mail size={18} />
           <span>Customer Notice</span>
           <em>Draft</em>
         </button>
-        <button type="button" className="action-button">
+        <button type="button" className="action-button" onClick={onCompliancePacket}>
           <FileCheck2 size={18} />
           <span>Compliance Packet</span>
           <em>In Progress</em>
@@ -559,9 +809,32 @@ function IncidentSummary({
           <FilePlus2 size={18} />
           <span>New recall</span>
         </button>
-        <button type="button" className="square-button" aria-label="More actions">
-          <MoreHorizontal size={18} />
-        </button>
+        <Dropdown
+          label="More actions"
+          renderTrigger={(props) => (
+            <button
+              type="button"
+              className="square-button"
+              aria-label="More actions"
+              {...props}
+            >
+              <MoreHorizontal size={18} />
+            </button>
+          )}
+        >
+          <a className="dropdown-item" href={evidencePacketDownloadUrl}>
+            <Download size={15} />
+            Download evidence packet
+          </a>
+          <button
+            type="button"
+            className="dropdown-item"
+            onClick={() => window.print()}
+          >
+            <Printer size={15} />
+            Print dashboard summary
+          </button>
+        </Dropdown>
       </div>
     </section>
   );
@@ -584,9 +857,19 @@ function Metric({ metric }: { metric: RecallMetric }) {
   );
 }
 
-function WorkflowTimeline({ workflow }: { workflow: WorkflowStep[] }) {
+function WorkflowTimeline({
+  workflow,
+  onViewFull,
+}: {
+  workflow: WorkflowStep[];
+  onViewFull: () => void;
+}) {
   return (
-    <section className="panel timeline-panel" aria-labelledby="timeline-title">
+    <section
+      className="panel timeline-panel"
+      aria-labelledby="timeline-title"
+      id="section-timeline"
+    >
       <PanelHeader title="Agent Workflow Timeline" />
       <div className="timeline" id="timeline-title">
         {workflow.map((step) => (
@@ -605,7 +888,7 @@ function WorkflowTimeline({ workflow }: { workflow: WorkflowStep[] }) {
           </div>
         ))}
       </div>
-      <button type="button" className="inline-link">
+      <button type="button" className="inline-link" onClick={onViewFull}>
         View full timeline
         <ArrowRight size={15} />
       </button>
@@ -613,24 +896,46 @@ function WorkflowTimeline({ workflow }: { workflow: WorkflowStep[] }) {
   );
 }
 
+const statusFilterOptions: { value: StatusFilter; label: string }[] = [
+  { value: "all", label: "All statuses" },
+  { value: "quarantined", label: "Quarantined" },
+  { value: "review", label: "Review" },
+  { value: "clear", label: "Clear" },
+];
+
 interface AffectedInventoryProps {
+  incident: RecallIncident;
   inventory: InventoryRow[];
   storeFilter: StoreFilter;
+  statusFilter: StatusFilter;
   quarantinedTotal: number;
   onFilterChange: (store: StoreFilter) => void;
+  onStatusFilterChange: (status: StatusFilter) => void;
+  onExport: () => void;
 }
 
 function AffectedInventory({
+  incident,
   inventory,
   storeFilter,
+  statusFilter,
   quarantinedTotal,
   onFilterChange,
+  onStatusFilterChange,
+  onExport,
 }: AffectedInventoryProps) {
   const filterOptions: StoreFilter[] = ["all", "Store A", "Store B"];
   const onHandTotal = inventory.reduce((total, row) => total + row.onHand, 0);
+  const statusLabel = statusFilterOptions.find(
+    (option) => option.value === statusFilter,
+  )?.label;
 
   return (
-    <section className="panel inventory-panel" aria-labelledby="inventory-title">
+    <section
+      className="panel inventory-panel"
+      aria-labelledby="inventory-title"
+      id="section-inventory"
+    >
       <div className="panel-header with-actions">
         <h2 id="inventory-title">Affected Inventory</h2>
         <div className="table-actions">
@@ -646,11 +951,30 @@ function AffectedInventory({
               </button>
             ))}
           </div>
-          <button type="button" className="utility-button">
-            <Filter size={16} />
-            Filter
-          </button>
-          <button type="button" className="utility-button">
+          <Dropdown
+            label="Filter inventory by status"
+            renderTrigger={(props) => (
+              <button type="button" className="utility-button" {...props}>
+                <Filter size={16} />
+                {statusFilter === "all" ? "Filter" : statusLabel}
+              </button>
+            )}
+          >
+            {statusFilterOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`dropdown-item ${
+                  statusFilter === option.value ? "selected" : ""
+                }`}
+                onClick={() => onStatusFilterChange(option.value)}
+              >
+                {statusFilter === option.value ? <Check size={15} /> : null}
+                {option.label}
+              </button>
+            ))}
+          </Dropdown>
+          <button type="button" className="utility-button" onClick={onExport}>
             <Download size={16} />
             Export
           </button>
@@ -658,7 +982,10 @@ function AffectedInventory({
       </div>
 
       <div className="table-wrap">
-        <table>
+        <table aria-labelledby="inventory-title">
+          <caption className="sr-only">
+            Affected inventory for {incident.product} lots {incident.lotRange}
+          </caption>
           <thead>
             <tr>
               <th scope="col">Store</th>
@@ -706,11 +1033,20 @@ function AffectedInventory({
 }
 
 function AgentPanel({ agents }: { agents: AgentActivity[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? agents : agents.slice(0, 5);
+
   return (
     <section className="panel rail-panel" aria-labelledby="agents-title">
-      <PanelHeader title="Live Agent Activity" actionLabel="View all" />
+      <PanelHeader
+        title="Live Agent Activity"
+        actionLabel={
+          agents.length > 5 ? (expanded ? "Show less" : "View all") : undefined
+        }
+        onAction={() => setExpanded((current) => !current)}
+      />
       <div className="rail-list" id="agents-title">
-        {agents.map((agent, index) => (
+        {visible.map((agent, index) => (
           <div className="rail-row" key={agent.id}>
             <span className="agent-icon" aria-hidden="true">
               {index % 3 === 0 ? (
@@ -737,11 +1073,24 @@ function AgentPanel({ agents }: { agents: AgentActivity[] }) {
 }
 
 function MemoryPanel({ insights }: { insights: MemoryInsight[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? insights : insights.slice(0, 3);
+
   return (
-    <section className="panel rail-panel" aria-labelledby="memory-title">
-      <PanelHeader title="Memory Insights" actionLabel="View all" />
+    <section
+      className="panel rail-panel"
+      aria-labelledby="memory-title"
+      id="section-memory"
+    >
+      <PanelHeader
+        title="Memory Insights"
+        actionLabel={
+          insights.length > 3 ? (expanded ? "Show less" : "View all") : undefined
+        }
+        onAction={() => setExpanded((current) => !current)}
+      />
       <div className="memory-list" id="memory-title">
-        {insights.map((insight, index) => (
+        {visible.map((insight, index) => (
           <div className="memory-row" key={insight.id}>
             <span className={`memory-icon ${insight.tone}`} aria-hidden="true">
               {index === 0 ? (
@@ -756,7 +1105,6 @@ function MemoryPanel({ insights }: { insights: MemoryInsight[] }) {
               <strong>{insight.title}</strong>
               <p>{insight.detail}</p>
             </div>
-            <button type="button">View</button>
           </div>
         ))}
       </div>
@@ -764,32 +1112,98 @@ function MemoryPanel({ insights }: { insights: MemoryInsight[] }) {
   );
 }
 
+type TaskSort = "priority" | "due" | "status";
+
+const taskSortLabels: Record<TaskSort, string> = {
+  priority: "Priority",
+  due: "Due",
+  status: "Status",
+};
+
+const severityRank: Record<Severity, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+const taskStatusRank: Record<TaskStatus, number> = {
+  blocked: 0,
+  "in-progress": 1,
+  "not-started": 2,
+  complete: 3,
+};
+
 interface TaskBoardProps {
   tasks: StaffTask[];
   onToggleTask: (taskId: string) => void;
+  onAssignToMe: () => void;
 }
 
-function TaskBoard({ tasks, onToggleTask }: TaskBoardProps) {
+function TaskBoard({ tasks, onToggleTask, onAssignToMe }: TaskBoardProps) {
+  const [sort, setSort] = useState<TaskSort>("priority");
+  const [expanded, setExpanded] = useState(false);
   const openCount = tasks.filter((task) => task.status !== "complete").length;
 
+  const sortedTasks = useMemo(() => {
+    const copy = [...tasks];
+    if (sort === "priority") {
+      copy.sort((a, b) => severityRank[a.priority] - severityRank[b.priority]);
+    } else if (sort === "status") {
+      copy.sort((a, b) => taskStatusRank[a.status] - taskStatusRank[b.status]);
+    } else {
+      copy.sort((a, b) => a.due.localeCompare(b.due));
+    }
+    return copy;
+  }, [tasks, sort]);
+
+  const visibleTasks = expanded ? sortedTasks : sortedTasks.slice(0, 5);
+
   return (
-    <section className="panel task-panel" aria-labelledby="tasks-title">
+    <section
+      className="panel task-panel"
+      aria-labelledby="tasks-title"
+      id="section-tasks"
+    >
       <div className="panel-header with-actions">
         <h2 id="tasks-title">Staff Task Board ({openCount} Open Tasks)</h2>
         <div className="table-actions">
-          <button type="button" className="utility-button">
+          <button
+            type="button"
+            className="utility-button"
+            onClick={onAssignToMe}
+            disabled={openCount === 0}
+          >
             <UserRound size={16} />
             Assign to me
           </button>
-          <button type="button" className="utility-button">
-            Sort: Priority
-            <ChevronDown size={15} />
-          </button>
+          <Dropdown
+            label="Sort tasks"
+            renderTrigger={(props) => (
+              <button type="button" className="utility-button" {...props}>
+                Sort: {taskSortLabels[sort]}
+                <ChevronDown size={15} />
+              </button>
+            )}
+          >
+            {(Object.keys(taskSortLabels) as TaskSort[]).map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={`dropdown-item ${sort === option ? "selected" : ""}`}
+                onClick={() => setSort(option)}
+              >
+                {sort === option ? <Check size={15} /> : null}
+                {taskSortLabels[option]}
+              </button>
+            ))}
+          </Dropdown>
         </div>
       </div>
 
       <div className="table-wrap compact">
-        <table>
+        <table aria-labelledby="tasks-title">
+          <caption className="sr-only">Staff tasks for the active recall</caption>
           <thead>
             <tr>
               <th scope="col">Task</th>
@@ -801,7 +1215,7 @@ function TaskBoard({ tasks, onToggleTask }: TaskBoardProps) {
             </tr>
           </thead>
           <tbody>
-            {tasks.map((task) => (
+            {visibleTasks.map((task) => (
               <tr key={task.id} className={task.status === "complete" ? "done" : ""}>
                 <td>
                   <label className="task-check">
@@ -831,11 +1245,20 @@ function TaskBoard({ tasks, onToggleTask }: TaskBoardProps) {
             ))}
           </tbody>
         </table>
+        {tasks.length === 0 ? (
+          <p className="empty-note">No staff tasks match the current search.</p>
+        ) : null}
       </div>
-      <button type="button" className="inline-link">
-        View all tasks
-        <ArrowRight size={15} />
-      </button>
+      {sortedTasks.length > 5 ? (
+        <button
+          type="button"
+          className="inline-link"
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded ? "Show fewer tasks" : `View all tasks (${sortedTasks.length})`}
+          <ArrowRight size={15} />
+        </button>
+      ) : null}
     </section>
   );
 }
@@ -849,6 +1272,8 @@ function EvidenceProgress({
   review,
   reviewState,
   reviewError,
+  activeView,
+  onViewChange,
   onRefresh,
   onReviewDecision,
 }: {
@@ -860,15 +1285,20 @@ function EvidenceProgress({
   review: EvidenceReviewState | null;
   reviewState: PacketState;
   reviewError: string;
+  activeView: EvidenceView;
+  onViewChange: (view: EvidenceView) => void;
   onRefresh: () => void;
   onReviewDecision: (decision: ReviewDecision) => void;
 }) {
-  const [activeView, setActiveView] = useState<"review" | "packet">("review");
   const isRefreshing =
     packetState === "loading" || reviewState === "loading";
 
   return (
-    <section className="panel evidence-panel" aria-labelledby="evidence-title">
+    <section
+      className="panel evidence-panel"
+      aria-labelledby="evidence-title"
+      id="section-evidence"
+    >
       <div className="panel-header with-actions">
         <h2 id="evidence-title">Evidence Packet Progress</h2>
         <div className="packet-actions">
@@ -893,7 +1323,7 @@ function EvidenceProgress({
           role="tab"
           aria-selected={activeView === "review"}
           className={activeView === "review" ? "active" : ""}
-          onClick={() => setActiveView("review")}
+          onClick={() => onViewChange("review")}
         >
           Review
         </button>
@@ -902,7 +1332,7 @@ function EvidenceProgress({
           role="tab"
           aria-selected={activeView === "packet"}
           className={activeView === "packet" ? "active" : ""}
-          onClick={() => setActiveView("packet")}
+          onClick={() => onViewChange("packet")}
         >
           Packet
         </button>
@@ -993,7 +1423,13 @@ function EvidencePacketPreview({ packet }: { packet: EvidencePacket }) {
   );
 }
 
-function Milestones({ milestones }: { milestones: Milestone[] }) {
+function Milestones({
+  milestones,
+  onViewTimeline,
+}: {
+  milestones: Milestone[];
+  onViewTimeline: () => void;
+}) {
   return (
     <section className="panel milestone-panel" aria-labelledby="milestones-title">
       <PanelHeader title="Next Milestones" />
@@ -1009,7 +1445,7 @@ function Milestones({ milestones }: { milestones: Milestone[] }) {
           </div>
         ))}
       </div>
-      <button type="button" className="inline-link">
+      <button type="button" className="inline-link" onClick={onViewTimeline}>
         View timeline
         <ArrowRight size={15} />
       </button>
@@ -1017,7 +1453,13 @@ function Milestones({ milestones }: { milestones: Milestone[] }) {
   );
 }
 
-function MobileInspection({ incident }: { incident: RecallIncident }) {
+function MobileInspection({
+  incident,
+  onOpenScanner,
+}: {
+  incident: RecallIncident;
+  onOpenScanner: () => void;
+}) {
   return (
     <section className="mobile-inspection" aria-labelledby="mobile-title">
       <div>
@@ -1032,7 +1474,9 @@ function MobileInspection({ incident }: { incident: RecallIncident }) {
           </p>
         </div>
       </div>
-      <button type="button">Open scanner</button>
+      <button type="button" onClick={onOpenScanner}>
+        Open scanner
+      </button>
     </section>
   );
 }
@@ -1040,18 +1484,64 @@ function MobileInspection({ incident }: { incident: RecallIncident }) {
 function PanelHeader({
   title,
   actionLabel,
+  onAction,
 }: {
   title: string;
   actionLabel?: string;
+  onAction?: () => void;
 }) {
   return (
     <div className="panel-header">
       <h2>{title}</h2>
       {actionLabel ? (
-        <button type="button" className="inline-link">
+        <button type="button" className="inline-link" onClick={onAction}>
           {actionLabel}
           <ArrowRight size={15} />
         </button>
+      ) : null}
+    </div>
+  );
+}
+
+function Dropdown({
+  label,
+  renderTrigger,
+  children,
+}: {
+  label: string;
+  renderTrigger: (props: {
+    onClick: () => void;
+    "aria-haspopup": "menu";
+    "aria-expanded": boolean;
+  }) => ReactNode;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="dropdown">
+      {renderTrigger({
+        onClick: () => setOpen((current) => !current),
+        "aria-haspopup": "menu",
+        "aria-expanded": open,
+      })}
+      {open ? (
+        <>
+          <button
+            type="button"
+            className="dropdown-backdrop"
+            aria-label={`Close ${label}`}
+            onClick={() => setOpen(false)}
+          />
+          <div
+            className="dropdown-menu"
+            role="menu"
+            aria-label={label}
+            onClickCapture={() => setOpen(false)}
+          >
+            {children}
+          </div>
+        </>
       ) : null}
     </div>
   );
@@ -1077,6 +1567,10 @@ function TaskState({ status }: { status: TaskStatus }) {
       {formatTaskStatus(status)}
     </span>
   );
+}
+
+function csvCell(value: string) {
+  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
 function getEvidenceProgress(evidence: EvidenceItem[]) {

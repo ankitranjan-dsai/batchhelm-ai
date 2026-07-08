@@ -1,4 +1,5 @@
 import { demoIncident } from "./data/demoIncident";
+import { getDemoKey } from "./auth";
 import { randomId } from "./randomId";
 import type {
   AgentActivity,
@@ -16,7 +17,12 @@ import type {
 } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
-export const evidencePacketDownloadUrl = `${API_BASE_URL}/api/evidence/demo-packet.md`;
+export const evidencePacketDownloadUrl = `${API_BASE_URL}/api/v1/evidence/demo-packet.md`;
+
+function authHeaders(): Record<string, string> {
+  const key = getDemoKey();
+  return key ? { "X-BatchHelm-Demo-Key": key } : {};
+}
 
 export type OutputSource = "qwen" | "deterministic" | "memory" | "reviewer";
 
@@ -142,10 +148,7 @@ interface BackendInventoryRow {
 export interface ProviderStatus {
   provider: string;
   configured: boolean;
-  base_url: string;
   mode: "live" | "demo-fallback";
-  text_model: string;
-  vision_model: string;
 }
 
 export type ProviderProofState =
@@ -157,8 +160,6 @@ export interface QwenVerificationReceipt {
   provider: "qwen-cloud";
   verified: true;
   model: string;
-  base_url: string;
-  provider_request_id: string | null;
   latency_ms: number;
   response_sha256: string;
   verified_at: string;
@@ -331,8 +332,9 @@ export async function createIntakePacket(
   if (shelfPhoto !== undefined) {
     formData.append("shelf_photo", shelfPhoto);
   }
-  const response = await fetch(`${API_BASE_URL}/api/intakes`, {
+  const response = await fetch(`${API_BASE_URL}/api/v1/intakes`, {
     method: "POST",
+    headers: authHeaders(),
     body: formData,
   });
   return responseJson<IntakeAccepted>(response, "Intake upload failed.");
@@ -345,7 +347,7 @@ export async function fetchIntake(
   const url = statusUrl.startsWith("http")
     ? statusUrl
     : `${API_BASE_URL}${statusUrl}`;
-  const response = await fetch(url, { signal });
+  const response = await fetch(url, { headers: authHeaders(), signal });
   return responseJson<IntakeView>(response, "Intake status request failed.");
 }
 
@@ -353,9 +355,9 @@ export async function updateIntakeDraft(
   intakeId: string,
   request: IntakeDraftUpdate,
 ): Promise<IntakeView> {
-  const response = await fetch(`${API_BASE_URL}/api/intakes/${intakeId}/draft`, {
+  const response = await fetch(`${API_BASE_URL}/api/v1/intakes/${intakeId}/draft`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify(request),
   });
   return responseJson<IntakeView>(response, "Intake update failed.");
@@ -366,10 +368,10 @@ export async function confirmIntake(
   request: IntakeConfirmRequest,
 ): Promise<IntakeView> {
   const response = await fetch(
-    `${API_BASE_URL}/api/intakes/${intakeId}/confirm`,
+    `${API_BASE_URL}/api/v1/intakes/${intakeId}/confirm`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify(request),
     },
   );
@@ -381,10 +383,10 @@ export async function startIntakeRun(
   requestId: string,
 ): Promise<IntakeRunAccepted> {
   const response = await fetch(
-    `${API_BASE_URL}/api/intakes/${intakeId}/runs`,
+    `${API_BASE_URL}/api/v1/intakes/${intakeId}/runs`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ request_id: requestId }),
     },
   );
@@ -412,44 +414,50 @@ async function responseJson<T>(
 }
 
 export async function fetchDashboardSync(): Promise<DashboardSync> {
-  const providerRequest = fetch(`${API_BASE_URL}/api/qwen/status`);
-  const proofRequest = fetch(`${API_BASE_URL}/api/qwen/proof`).catch(
-    () => null,
-  );
-  const [providerResponse, proofResponse] = await Promise.all([
-    providerRequest,
-    proofRequest,
-  ]);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const providerRequest = fetch(`${API_BASE_URL}/api/v1/qwen/status`, { headers: authHeaders(), signal: controller.signal });
+    const proofRequest = fetch(`${API_BASE_URL}/api/v1/qwen/proof`, { headers: authHeaders(), signal: controller.signal }).catch(
+      () => null,
+    );
+    const [providerResponse, proofResponse] = await Promise.all([
+      providerRequest,
+      proofRequest,
+    ]);
 
-  if (!providerResponse.ok) {
-    throw new Error(`Provider request failed with ${providerResponse.status}`);
-  }
+    if (!providerResponse.ok) {
+      throw new Error(`Provider request failed with ${providerResponse.status}`);
+    }
 
-  const provider = (await providerResponse.json()) as ProviderStatus;
-  if (proofResponse === null) {
-    return { provider, proof: null, proofState: "unavailable" };
-  }
-  if (proofResponse.ok) {
+    const provider = (await providerResponse.json()) as ProviderStatus;
+    if (proofResponse === null) {
+      return { provider, proof: null, proofState: "unavailable" };
+    }
+    if (proofResponse.ok) {
+      return {
+        provider,
+        proof: (await proofResponse.json()) as QwenVerificationReceipt,
+        proofState: "verified",
+      };
+    }
     return {
       provider,
-      proof: (await proofResponse.json()) as QwenVerificationReceipt,
-      proofState: "verified",
+      proof: null,
+      proofState:
+        proofResponse.status === 404 ? "not-verified" : "unavailable",
     };
+  } finally {
+    clearTimeout(timeout);
   }
-  return {
-    provider,
-    proof: null,
-    proofState:
-      proofResponse.status === 404 ? "not-verified" : "unavailable",
-  };
 }
 
 export async function startDemoRun(
   requestId: string,
 ): Promise<OrchestrationRunAccepted> {
-  const response = await fetch(`${API_BASE_URL}/api/incidents/demo/runs`, {
+  const response = await fetch(`${API_BASE_URL}/api/v1/incidents/demo/runs`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify({ request_id: requestId }),
   });
   if (!response.ok) {
@@ -469,15 +477,15 @@ export function orchestrationEventsUrl(
 }
 
 export async function fetchMemoryRecords(): Promise<MemoryRecord[]> {
-  const response = await fetch(`${API_BASE_URL}/api/memory`);
+  const response = await fetch(`${API_BASE_URL}/api/v1/memory`, { headers: authHeaders() });
   if (!response.ok) {
     throw new Error(`Memory request failed with ${response.status}`);
   }
   return (await response.json()) as MemoryRecord[];
 }
 
-export async function fetchDemoInspection(): Promise<ShelfInspectionResult> {
-  const response = await fetch(`${API_BASE_URL}/api/inspections/demo`);
+export async function fetchDemoInspection(signal?: AbortSignal): Promise<ShelfInspectionResult> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/inspections/demo`, { headers: authHeaders(), signal });
   if (!response.ok) {
     throw new Error(`Demo inspection request failed with ${response.status}`);
   }
@@ -485,13 +493,15 @@ export async function fetchDemoInspection(): Promise<ShelfInspectionResult> {
   return (await response.json()) as ShelfInspectionResult;
 }
 
-export async function uploadShelfPhoto(file: File): Promise<ShelfInspectionResult> {
+export async function uploadShelfPhoto(file: File, signal?: AbortSignal): Promise<ShelfInspectionResult> {
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await fetch(`${API_BASE_URL}/api/inspections/shelf-photo`, {
+  const response = await fetch(`${API_BASE_URL}/api/v1/inspections/shelf-photo`, {
     method: "POST",
+    headers: authHeaders(),
     body: formData,
+    signal,
   });
   if (!response.ok) {
     throw new Error(`Shelf inspection request failed with ${response.status}`);
@@ -500,8 +510,8 @@ export async function uploadShelfPhoto(file: File): Promise<ShelfInspectionResul
   return (await response.json()) as ShelfInspectionResult;
 }
 
-export async function fetchEvidencePacket(): Promise<EvidencePacket> {
-  const response = await fetch(`${API_BASE_URL}/api/evidence/demo-packet`);
+export async function fetchEvidencePacket(signal?: AbortSignal): Promise<EvidencePacket> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/evidence/demo-packet`, { headers: authHeaders(), signal });
   if (!response.ok) {
     throw new Error(`Evidence packet request failed with ${response.status}`);
   }
@@ -509,8 +519,8 @@ export async function fetchEvidencePacket(): Promise<EvidencePacket> {
   return (await response.json()) as EvidencePacket;
 }
 
-export async function fetchEvidenceReview(): Promise<EvidenceReviewState> {
-  const response = await fetch(`${API_BASE_URL}/api/evidence/demo-review`);
+export async function fetchEvidenceReview(signal?: AbortSignal): Promise<EvidenceReviewState> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/evidence/demo-review`, { headers: authHeaders(), signal });
   if (!response.ok) {
     throw new Error(`Evidence review request failed with ${response.status}`);
   }
@@ -520,12 +530,11 @@ export async function fetchEvidenceReview(): Promise<EvidenceReviewState> {
 
 export async function submitReviewDecision(
   decision: ReviewDecision,
+  signal?: AbortSignal,
 ): Promise<EvidenceReviewState> {
-  const response = await fetch(`${API_BASE_URL}/api/evidence/demo-review/decision`, {
+  const response = await fetch(`${API_BASE_URL}/api/v1/evidence/demo-review/decision`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify({
       request_id: randomId(),
       reviewer: "Operations Manager",
@@ -535,6 +544,7 @@ export async function submitReviewDecision(
           ? "Approved for supplier submission."
           : "Resolve open evidence blockers before submission.",
     }),
+    signal,
   });
   if (!response.ok) {
     throw new Error(`Evidence review decision failed with ${response.status}`);

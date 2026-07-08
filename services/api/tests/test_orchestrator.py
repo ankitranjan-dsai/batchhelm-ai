@@ -13,8 +13,7 @@ from batchhelm_api.models import (
     AgentEventType,
     AgentRunResult,
     AgentRunStatus,
-    OutputSource,
-)
+    OutputSource)
 from batchhelm_api.orchestration_state import OrchestrationCheckpoint
 from batchhelm_api.qwen import QwenGateway
 from batchhelm_api.sample_data import build_demo_incident
@@ -22,8 +21,7 @@ from tests.conftest import (
     erroring_gateway,
     fallback_gateway,
     make_settings,
-    scripted_gateway,
-)
+    scripted_gateway)
 
 
 def _orchestrator(gateway, **kwargs) -> Orchestrator:
@@ -31,8 +29,7 @@ def _orchestrator(gateway, **kwargs) -> Orchestrator:
         gateway=gateway,
         memory=InMemoryMemoryRepository(),
         settings=make_settings(),
-        **kwargs,
-    )
+        **kwargs)
 
 
 async def test_full_run_completes_all_agents_in_fallback_mode() -> None:
@@ -72,15 +69,13 @@ async def test_real_shelf_fallback_names_artifact_without_inferring_match() -> N
         size_bytes=len(shelf_bytes),
         sha256="a" * 64,
         relative_path="intakes/intake-1/shelf-1.png",
-        created_at="2026-07-04T08:00:00+00:00",
-    )
+        created_at="2026-07-04T08:00:00+00:00")
 
     result = await orchestrator.run(
         build_demo_incident(),
         shelf_image_bytes=shelf_bytes,
         shelf_image_media_type="image/png",
-        shelf_upload=shelf_artifact,
-    )
+        shelf_upload=shelf_artifact)
     vision = next(agent for agent in result.agents if agent.agent == SHELF_VISION)
 
     assert "store-b-cooler-spinach.png" in vision.summary
@@ -115,16 +110,12 @@ async def test_shelf_vision_sends_demo_photo_when_run_has_no_upload() -> None:
             200,
             json={
                 "choices": [{"message": {"content": json.dumps({"confidence": 90})}}]
-            },
-        )
+            })
 
     gateway = QwenGateway(
         make_settings(api_key="test-key"),
         client_factory=lambda: httpx.AsyncClient(
-            base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-            transport=httpx.MockTransport(handler),
-        ),
-    )
+                        transport=httpx.MockTransport(handler)))
     orchestrator = _orchestrator(gateway)
 
     await orchestrator.run(build_demo_incident())
@@ -160,8 +151,7 @@ async def test_conflict_is_detected_and_resolved_when_qwen_disagrees() -> None:
             "risk_level": "high",
             "urgency": "Remove now",
             "summary": "Partial",
-            "confidence": 90,
-        }
+            "confidence": 90}
     )
     orchestrator = _orchestrator(gateway)
 
@@ -248,14 +238,12 @@ async def test_event_is_persisted_before_it_is_published() -> None:
         "run-1",
         persist=persist,
         emit=publish,
-        initial_sequence=7,
-    )
+        initial_sequence=7)
 
     event = await recorder.record(
         agent="Orchestrator Agent",
         type=AgentEventType.started,
-        message="Started.",
-    )
+        message="Started.")
 
     assert event.sequence == 8
     assert order == ["persist:8", "publish:8"]
@@ -268,8 +256,7 @@ class _CountingAgent(Agent):
         self,
         name: str,
         calls: dict[str, int],
-        depends_on: tuple[str, ...] = (),
-    ) -> None:
+        depends_on: tuple[str, ...] = ()) -> None:
         self.name = name
         self.calls = calls
         self.depends_on = depends_on
@@ -280,8 +267,7 @@ class _CountingAgent(Agent):
         return AgentOutput(
             summary=f"{self.name} complete",
             confidence=90,
-            source=OutputSource.deterministic,
-        )
+            source=OutputSource.deterministic)
 
 
 async def test_orchestrator_preserves_caller_run_id_and_saves_each_wave() -> None:
@@ -291,8 +277,7 @@ async def test_orchestrator_preserves_caller_run_id_and_saves_each_wave() -> Non
     result = await orchestrator.run(
         build_demo_incident(),
         run_id="run-owned-by-service",
-        checkpoint_sink=checkpoints.append,
-    )
+        checkpoint_sink=checkpoints.append)
 
     assert result.run_id == "run-owned-by-service"
     assert checkpoints
@@ -305,8 +290,7 @@ async def test_resume_skips_agents_from_completed_waves() -> None:
     second = _CountingAgent("Second", calls, depends_on=("First",))
     orchestrator = _orchestrator(
         fallback_gateway(),
-        agents=[first, second],
-    )
+        agents=[first, second])
     checkpoint = OrchestrationCheckpoint(
         run_id="run-1",
         started_at="2026-06-30T09:00:00+00:00",
@@ -320,16 +304,13 @@ async def test_resume_skips_agents_from_completed_waves() -> None:
                 confidence=90,
                 source=OutputSource.deterministic,
                 started_at="2026-06-30T09:00:00+00:00",
-                finished_at="2026-06-30T09:00:01+00:00",
-            )
-        ],
-    )
+                finished_at="2026-06-30T09:00:01+00:00")
+        ])
 
     result = await orchestrator.run(
         build_demo_incident(),
         run_id="run-1",
-        recovery=checkpoint,
-    )
+        recovery=checkpoint)
 
     assert calls.get("First", 0) == 0
     assert calls["Second"] == 1

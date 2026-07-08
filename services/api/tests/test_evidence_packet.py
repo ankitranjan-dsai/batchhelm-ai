@@ -16,8 +16,7 @@ def make_client() -> TestClient:
         QWEN_TEXT_MODEL="qwen-plus",
         QWEN_VISION_MODEL="qwen-vl-plus",
         APP_ENV="test",
-        LOG_LEVEL="debug",
-    )
+        LOG_LEVEL="debug")
     return TestClient(create_app(settings=settings))
 
 
@@ -29,8 +28,7 @@ def test_build_evidence_packet_contains_core_recall_sections() -> None:
         incident=incident,
         analysis=analysis,
         inspection=build_demo_shelf_inspection(),
-        generated_at=datetime(2026, 6, 26, 10, 30, tzinfo=timezone.utc),
-    )
+        generated_at=datetime(2026, 6, 26, 10, 30, tzinfo=timezone.utc))
 
     assert packet.filename == "batchhelm-recall-spinach-2026-06-evidence.md"
     assert packet.incident_id == "recall-spinach-2026-06"
@@ -56,14 +54,12 @@ def test_packet_version_ignores_generation_timestamp() -> None:
         incident=incident,
         analysis=analysis,
         inspection=inspection,
-        generated_at=datetime(2026, 6, 26, 10, 30, tzinfo=timezone.utc),
-    )
+        generated_at=datetime(2026, 6, 26, 10, 30, tzinfo=timezone.utc))
     second = build_evidence_packet(
         incident=incident,
         analysis=analysis,
         inspection=inspection,
-        generated_at=datetime(2026, 6, 27, 18, 45, tzinfo=timezone.utc),
-    )
+        generated_at=datetime(2026, 6, 27, 18, 45, tzinfo=timezone.utc))
 
     assert first.generated_at != second.generated_at
     assert first.packet_version == second.packet_version
@@ -81,19 +77,17 @@ def test_packet_version_changes_when_evidence_changes() -> None:
     first = build_evidence_packet(
         incident=incident,
         analysis=analysis,
-        inspection=inspection,
-    )
+        inspection=inspection)
     changed = build_evidence_packet(
         incident=incident,
         analysis=analysis,
-        inspection=changed_inspection,
-    )
+        inspection=changed_inspection)
 
     assert first.packet_version != changed.packet_version
 
 
 def test_demo_evidence_packet_endpoint_returns_preview() -> None:
-    response = make_client().get("/api/evidence/demo-packet")
+    response = make_client().get("/api/v1/evidence/demo-packet")
 
     assert response.status_code == 200
     payload = response.json()
@@ -104,7 +98,7 @@ def test_demo_evidence_packet_endpoint_returns_preview() -> None:
 
 
 def test_demo_evidence_packet_download_has_attachment_header() -> None:
-    response = make_client().get("/api/evidence/demo-packet.md")
+    response = make_client().get("/api/v1/evidence/demo-packet.md")
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/markdown")
