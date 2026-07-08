@@ -204,6 +204,10 @@ export function Dashboard({ incident, onNewRecall }: DashboardProps) {
               </div>
             ))}
           </div>
+          <Link to="/memory" className="inline-link">
+            View memory page
+            <ArrowRight size={15} />
+          </Link>
         </section>
 
         {/* Next Milestones */}

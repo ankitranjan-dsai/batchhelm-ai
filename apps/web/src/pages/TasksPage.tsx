@@ -38,6 +38,7 @@ const taskSortLabels: Record<TaskSort, string> = {
 
 export function TasksPage({ tasks, onToggleTask, onAssignToMe }: TasksPageProps) {
   const [sort, setSort] = useState<TaskSort>("priority");
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const openCount = tasks.filter((task) => task.status !== "complete").length;
 
   const sortedTasks = useMemo(() => {
@@ -74,24 +75,51 @@ export function TasksPage({ tasks, onToggleTask, onAssignToMe }: TasksPageProps)
         <div className="panel-header with-actions">
           <h2 id="tasks-title">Tasks</h2>
           <div className="table-actions">
-            <div className="dropdown">
-              <button type="button" className="utility-button">
+            <div
+              className="dropdown"
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setSortMenuOpen(false);
+              }}
+            >
+              <button
+                type="button"
+                className="utility-button"
+                aria-haspopup="menu"
+                aria-expanded={sortMenuOpen}
+                onClick={() => setSortMenuOpen((open) => !open)}
+              >
                 Sort: {taskSortLabels[sort]}
                 <ChevronDown size={15} />
               </button>
-              <div className="dropdown-menu">
-                {(Object.keys(taskSortLabels) as TaskSort[]).map((option) => (
+              {sortMenuOpen ? (
+                <>
                   <button
-                    key={option}
                     type="button"
-                    className={`dropdown-item ${sort === option ? "selected" : ""}`}
-                    onClick={() => setSort(option)}
-                  >
-                    {sort === option ? <Check size={15} /> : null}
-                    {taskSortLabels[option]}
-                  </button>
-                ))}
-              </div>
+                    className="dropdown-backdrop"
+                    aria-label="Close sort menu"
+                    tabIndex={-1}
+                    onClick={() => setSortMenuOpen(false)}
+                  />
+                  <div className="dropdown-menu" role="menu">
+                    {(Object.keys(taskSortLabels) as TaskSort[]).map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={sort === option}
+                        className={`dropdown-item ${sort === option ? "selected" : ""}`}
+                        onClick={() => {
+                          setSort(option);
+                          setSortMenuOpen(false);
+                        }}
+                      >
+                        {sort === option ? <Check size={15} /> : null}
+                        {taskSortLabels[option]}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : null}
             </div>
           </div>
         </div>

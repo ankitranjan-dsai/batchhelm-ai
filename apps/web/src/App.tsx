@@ -40,6 +40,7 @@ const AgentsPage = lazy(() => import("./pages/AgentsPage").then((m) => ({ defaul
 const TasksPage = lazy(() => import("./pages/TasksPage").then((m) => ({ default: m.TasksPage })));
 const EvidencePage = lazy(() => import("./pages/EvidencePage").then((m) => ({ default: m.EvidencePage })));
 const TimelinePage = lazy(() => import("./pages/TimelinePage").then((m) => ({ default: m.TimelinePage })));
+const MemoryPage = lazy(() => import("./pages/MemoryPage").then((m) => ({ default: m.MemoryPage })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const NotFound = lazy(() => import("./pages/NotFound").then((m) => ({ default: m.NotFound })));
 
@@ -268,7 +269,7 @@ export function App() {
               }
             />
             <Route path="/timeline" element={<TimelinePage workflow={incident.workflow} />} />
-            <Route path="/memory" element={<Dashboard incident={incident} onNewRecall={intakeController.open} />} />
+            <Route path="/memory" element={<MemoryPage insights={incident.insights} />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
