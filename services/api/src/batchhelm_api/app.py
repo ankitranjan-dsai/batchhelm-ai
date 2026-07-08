@@ -532,6 +532,10 @@ def create_app(
     async def health() -> HealthResponse:
         return HealthResponse(status="ok", service="batchhelm-api", version="0.2.0")
 
+    @app.get("/api/v1/health", response_model=HealthResponse)
+    async def health_v1() -> HealthResponse:
+        return HealthResponse(status="ok", service="batchhelm-api", version="0.2.0")
+
     @app.post(
         "/api/v1/intakes",
         response_model=IntakeAccepted,

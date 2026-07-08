@@ -108,6 +108,20 @@ export function App() {
     return () => window.removeEventListener("keydown", focusSearch);
   }, []);
 
+  useEffect(() => {
+    const titles: Record<string, string> = {
+      "/": "Recalls | BatchHelm AI",
+      "/inventory": "Inventory | BatchHelm AI",
+      "/tasks": "Tasks | BatchHelm AI",
+      "/agents": "Agent Mission Control | BatchHelm AI",
+      "/evidence": "Evidence | BatchHelm AI",
+      "/timeline": "Timeline | BatchHelm AI",
+      "/memory": "Memory | BatchHelm AI",
+      "/settings": "Settings | BatchHelm AI",
+    };
+    document.title = titles[location.pathname] || "BatchHelm AI";
+  }, [location.pathname]);
+
   const refreshEvidence = useCallback((signal?: AbortSignal) => {
     setPacketState("loading");
     setReviewState("loading");
@@ -275,10 +289,25 @@ export function App() {
           </Routes>
         </Suspense>
         </main>
+        <Footer />
       </div>
       <MobileNav activePath={location.pathname} openTaskCount={openTaskCount} />
       <IntakeWorkspace controller={intakeController} />
     </div>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="app-footer">
+      <span>BatchHelm AI · Recall Command Center</span>
+      <span className="app-footer-dot" aria-hidden="true" />
+      <a href={helpUrl} target="_blank" rel="noreferrer">
+        Help & Support
+      </a>
+      <span className="app-footer-dot" aria-hidden="true" />
+      <Link to="/settings">Settings</Link>
+    </footer>
   );
 }
 
