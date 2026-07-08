@@ -124,30 +124,6 @@ export function AgentsPage({ session, onRerun }: AgentsPageProps) {
         ))}
       </section>
 
-      {/* Execution Events */}
-      <section className="panel events-panel" aria-labelledby="events-title">
-        <div className="panel-header">
-          <h2 id="events-title">Execution Events</h2>
-          <span className="count-badge">{session.events.length}</span>
-        </div>
-        <div className="events-list">
-          {session.events.length === 0 ? (
-            <p className="empty-note">
-              No execution events yet. Agents will appear here as they run.
-            </p>
-          ) : (
-            session.events.map((event) => (
-              <div key={event.id} className={`event-row ${event.type}`}>
-                <span className="event-agent">{event.agent}</span>
-                <span className="event-type">{event.type}</span>
-                <span className="event-message">{event.message}</span>
-                <time>{new Date(event.at).toLocaleTimeString()}</time>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
-
       {/* Wave / Agent Detail */}
       <section className="panel agent-detail-panel" aria-labelledby="wave-detail-title" aria-live="polite">
         {selectedWave === null ? (
@@ -217,6 +193,30 @@ export function AgentsPage({ session, onRerun }: AgentsPageProps) {
             </div>
           </>
         )}
+      </section>
+
+      {/* Execution Events */}
+      <section className="panel events-panel" aria-labelledby="events-title">
+        <div className="panel-header">
+          <h2 id="events-title">Execution Events</h2>
+          <span className="count-badge">{session.events.length}</span>
+        </div>
+        <div className="events-list">
+          {session.events.length === 0 ? (
+            <p className="empty-note">
+              No execution events yet. Agents will appear here as they run.
+            </p>
+          ) : (
+            session.events.map((event) => (
+              <div key={event.id} className={`event-row ${event.type}`}>
+                <span className="event-agent">{event.agent}</span>
+                <span className="event-type">{event.type}</span>
+                <span className="event-message">{event.message}</span>
+                <time>{new Date(event.at).toLocaleTimeString()}</time>
+              </div>
+            ))
+          )}
+        </div>
       </section>
     </div>
   );
