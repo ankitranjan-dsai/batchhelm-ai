@@ -43,6 +43,7 @@ export type OrchestrationSessionAction =
   | { type: "event"; event: AgentRunEvent }
   | { type: "reconnecting" }
   | { type: "completed"; result: OrchestrationResult }
+  | { type: "restored"; result: OrchestrationResult }
   | { type: "failed"; message: string }
   | { type: "reset" };
 
@@ -81,6 +82,19 @@ export function orchestrationSessionReducer(
       ...state,
       result: action.result,
       connection: "completed",
+      error: "",
+    };
+  }
+  if (action.type === "restored") {
+    const events = [...action.result.events].sort(
+      (left, right) => left.sequence - right.sequence,
+    );
+    return {
+      accepted: null,
+      events,
+      result: action.result,
+      connection: "completed",
+      lastSequence: events[events.length - 1]?.sequence ?? 0,
       error: "",
     };
   }

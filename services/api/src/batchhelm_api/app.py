@@ -695,6 +695,26 @@ def create_app(
         )
 
     @app.get(
+        "/api/v1/orchestration/runs/latest",
+        response_model=OrchestrationRunView,
+        include_in_schema=False,
+    )
+    async def latest_orchestration_run(
+
+        service: OrchestrationService = Depends(get_orchestration_service),
+    ) -> OrchestrationRunView | JSONResponse:
+        view = service.latest()
+        if view is None:
+            return JSONResponse(
+                status_code=404,
+                content=APIError(
+                    code="orchestration_run_not_found",
+                    message="No completed orchestration run is available yet.",
+                ).model_dump(),
+            )
+        return view
+
+    @app.get(
         "/api/v1/orchestration/runs/{run_id}",
         response_model=OrchestrationRunView,
         include_in_schema=False,

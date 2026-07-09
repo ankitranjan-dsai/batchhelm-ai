@@ -44,6 +44,26 @@ def test_run_endpoint_returns_full_orchestration_result() -> None:
     assert payload["events"]
 
 
+def test_latest_run_returns_404_before_any_run() -> None:
+    with make_client() as client:
+        response = client.get("/api/v1/orchestration/runs/latest")
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "orchestration_run_not_found"
+
+
+def test_latest_run_returns_most_recent_completed_result() -> None:
+    with make_client() as client:
+        client.post("/api/v1/incidents/demo/run")
+        response = client.get("/api/v1/orchestration/runs/latest")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "completed"
+    assert payload["result"] is not None
+    assert len(payload["result"]["agents"]) == 9
+
+
 def test_stream_endpoint_emits_sse_events_and_result() -> None:
     response = make_client().get("/api/v1/incidents/demo/run/stream")
 

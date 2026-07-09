@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useState } from "react";
 import {
+  fetchLatestRun,
   orchestrationEventsUrl,
   startDemoRun,
   type AgentRunEvent,
@@ -43,7 +44,6 @@ export function useOrchestrationRun() {
     let active = true;
     let source: EventSource | null = null;
     let settled = false;
-    dispatch({ type: "starting" });
 
     const connect = (accepted: OrchestrationRunAccepted) => {
       if (!active) {
@@ -97,8 +97,10 @@ export function useOrchestrationRun() {
 
     const restored = restoreAcceptedRun();
     if (restored !== null) {
+      dispatch({ type: "starting" });
       connect(restored);
-    } else {
+    } else if (generation > 0) {
+      dispatch({ type: "starting" });
       void startRunOnce()
         .then(connect)
         .catch(() => {
@@ -108,6 +110,18 @@ export function useOrchestrationRun() {
               message: "Agent Mission Control is unavailable.",
             });
           }
+        });
+    } else {
+      // First visit in this tab: show the last saved run instead of
+      // spending model credits. A new run starts only from the button.
+      void fetchLatestRun()
+        .then((view) => {
+          if (active && view?.result != null) {
+            dispatch({ type: "restored", result: view.result });
+          }
+        })
+        .catch(() => {
+          // Stay idle when no cached run is reachable.
         });
     }
 

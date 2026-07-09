@@ -208,7 +208,7 @@ export function App() {
                     accepted: orchestrationSession.accepted,
                     result: orchestrationSession.result,
                     events: orchestrationSession.events,
-                    connected: orchestrationSession.connection === "streaming" || orchestrationSession.connection === "completed",
+                    connection: orchestrationSession.connection,
                     error: orchestrationSession.error || null,
                   }}
                   onRerun={rerunOrchestration}

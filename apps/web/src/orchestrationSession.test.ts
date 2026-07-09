@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   orchestrationEventsUrl,
   type AgentRunEvent,
+  type OrchestrationResult,
   type OrchestrationRunAccepted,
 } from "./api";
 import {
@@ -38,6 +39,26 @@ describe("orchestrationSessionReducer", () => {
       event: event(2),
     });
 
+    expect(state.events.map((item) => item.sequence)).toEqual([1, 2]);
+    expect(state.lastSequence).toBe(2);
+  });
+
+  it("restores a cached result with its events and completed connection", () => {
+    const result = {
+      run_id: "run-1",
+      incident_id: "incident-1",
+      status: "completed",
+      events: [event(2), event(1)],
+      summary: "Complete",
+    } as unknown as OrchestrationResult;
+
+    const state = orchestrationSessionReducer(initialOrchestrationSession, {
+      type: "restored",
+      result,
+    });
+
+    expect(state.connection).toBe("completed");
+    expect(state.result).toBe(result);
     expect(state.events.map((item) => item.sequence)).toEqual([1, 2]);
     expect(state.lastSequence).toBe(2);
   });

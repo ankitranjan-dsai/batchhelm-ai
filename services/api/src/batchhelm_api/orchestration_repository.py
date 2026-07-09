@@ -108,6 +108,8 @@ class OrchestrationRepository(Protocol):
 
     def list_recoverable(self) -> list[OrchestrationRunRecord]: ...
 
+    def latest_completed_run(self) -> OrchestrationRunRecord | None: ...
+
 
 class UnavailableOrchestrationRepository:
     def __init__(self, cause: OrchestrationStoreUnavailable) -> None:
@@ -163,6 +165,9 @@ class UnavailableOrchestrationRepository:
 
     def list_recoverable(self) -> list[OrchestrationRunRecord]:
         return []
+
+    def latest_completed_run(self) -> OrchestrationRunRecord | None:
+        return None
 
     def _raise(self):
         raise OrchestrationStoreUnavailable(
@@ -635,6 +640,32 @@ class SQLiteOrchestrationRepository:
                     ),
                 ).fetchall()
             return [_run_from_row(row) for row in rows]
+        except (
+            OSError,
+            sqlite3.Error,
+            ValidationError,
+            ValueError,
+            KeyError,
+        ) as exc:
+            raise OrchestrationStoreUnavailable(
+                "Orchestration storage is unavailable."
+            ) from exc
+
+    def latest_completed_run(self) -> OrchestrationRunRecord | None:
+        try:
+            with closing(self._connect()) as connection:
+                row = connection.execute(
+                    """
+                    SELECT * FROM orchestration_runs
+                    WHERE status = ? AND result_json IS NOT NULL
+                    ORDER BY finished_at DESC
+                    LIMIT 1
+                    """,
+                    (AgentRunStatus.completed.value,),
+                ).fetchone()
+            if row is None:
+                return None
+            return _run_from_row(row)
         except (
             OSError,
             sqlite3.Error,

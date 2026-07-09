@@ -70,6 +70,10 @@ class OrchestrationService:
     def get(self, run_id: str) -> OrchestrationRunView:
         return self.repository.get_run(run_id).to_view()
 
+    def latest(self) -> OrchestrationRunView | None:
+        run = self.repository.latest_completed_run()
+        return run.to_view() if run is not None else None
+
     def worker_start_count(self, run_id: str) -> int:
         return self._worker_starts.get(run_id, 0)
 

@@ -91,28 +91,52 @@ describe("useOrchestrationRun", () => {
     });
   });
 
-  it("starts one run and applies its streamed terminal result", async () => {
+  it("shows the cached latest run on mount without starting a run", async () => {
     const start = vi.spyOn(api, "startDemoRun").mockResolvedValue(accepted);
+    const latest = vi.spyOn(api, "fetchLatestRun").mockResolvedValue({
+      run_id: "run-1",
+      incident_id: "recall-spinach-2026-06",
+      status: "completed",
+      provider_mode: "demo-fallback",
+      started_at: "2026-06-30T09:00:00+00:00",
+      updated_at: "2026-06-30T09:00:01+00:00",
+      finished_at: "2026-06-30T09:00:01+00:00",
+      result: orchestrationResult,
+    });
 
     const { result } = renderHook(() => useOrchestrationRun());
-
-    await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
-    expect(MockEventSource.instances).toHaveLength(1);
-
-    act(() => {
-      MockEventSource.instances[0].emit("result", orchestrationResult);
-    });
 
     await waitFor(() => {
       expect(result.current.session.result).toEqual(orchestrationResult);
     });
     expect(result.current.session.connection).toBe("completed");
+    expect(latest).toHaveBeenCalled();
+    expect(start).not.toHaveBeenCalled();
+    expect(MockEventSource.instances).toHaveLength(0);
   });
 
-  it("starts one request when React Strict Mode remounts the effect", async () => {
+  it("stays idle on mount when no cached run exists", async () => {
+    const start = vi.spyOn(api, "startDemoRun").mockResolvedValue(accepted);
+    const latest = vi.spyOn(api, "fetchLatestRun").mockResolvedValue(null);
+
+    const { result } = renderHook(() => useOrchestrationRun());
+
+    await waitFor(() => expect(latest).toHaveBeenCalled());
+    expect(result.current.session.connection).toBe("idle");
+    expect(start).not.toHaveBeenCalled();
+    expect(MockEventSource.instances).toHaveLength(0);
+  });
+
+  it("starts one request when React Strict Mode remounts after rerun", async () => {
+    vi.spyOn(api, "fetchLatestRun").mockResolvedValue(null);
     const start = vi.spyOn(api, "startDemoRun").mockResolvedValue(accepted);
 
-    renderHook(() => useOrchestrationRun(), { wrapper: StrictMode });
+    const { result } = renderHook(() => useOrchestrationRun(), {
+      wrapper: StrictMode,
+    });
+    expect(start).not.toHaveBeenCalled();
+
+    act(() => result.current.rerun());
 
     await waitFor(() => {
       expect(MockEventSource.instances).toHaveLength(1);
@@ -126,6 +150,7 @@ describe("useOrchestrationRun", () => {
       JSON.stringify(accepted),
     );
     const start = vi.spyOn(api, "startDemoRun").mockResolvedValue(accepted);
+    const latest = vi.spyOn(api, "fetchLatestRun").mockResolvedValue(null);
 
     renderHook(() => useOrchestrationRun());
 
@@ -133,10 +158,12 @@ describe("useOrchestrationRun", () => {
       expect(MockEventSource.instances).toHaveLength(1);
     });
     expect(start).not.toHaveBeenCalled();
+    expect(latest).not.toHaveBeenCalled();
     expect(MockEventSource.instances[0].url).toContain(accepted.run_id);
   });
 
-  it("creates one new request only when rerun is selected", async () => {
+  it("creates one new request each time rerun is selected", async () => {
+    vi.spyOn(api, "fetchLatestRun").mockResolvedValue(null);
     const start = vi
       .spyOn(api, "startDemoRun")
       .mockResolvedValueOnce(accepted)
@@ -148,10 +175,12 @@ describe("useOrchestrationRun", () => {
       });
 
     const { result } = renderHook(() => useOrchestrationRun());
+    expect(start).not.toHaveBeenCalled();
+
+    act(() => result.current.rerun());
     await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
 
     act(() => result.current.rerun());
-
     await waitFor(() => expect(start).toHaveBeenCalledTimes(2));
     expect(start.mock.calls.map(([requestId]) => requestId)).toEqual([
       "request-1",
@@ -159,10 +188,10 @@ describe("useOrchestrationRun", () => {
     ]);
   });
 
-  it("adopts an intake run without starting another demo run", async () => {
+  it("adopts an intake run without starting a demo run", async () => {
+    vi.spyOn(api, "fetchLatestRun").mockResolvedValue(null);
     const start = vi.spyOn(api, "startDemoRun").mockResolvedValue(accepted);
     const { result } = renderHook(() => useOrchestrationRun());
-    await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
     const intakeAccepted = {
       ...accepted,
       run_id: "run-intake",
@@ -178,6 +207,6 @@ describe("useOrchestrationRun", () => {
         intakeAccepted.run_id,
       );
     });
-    expect(start).toHaveBeenCalledTimes(1);
+    expect(start).not.toHaveBeenCalled();
   });
 });

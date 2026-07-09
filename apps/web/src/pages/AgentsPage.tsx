@@ -8,15 +8,17 @@ import {
   PackageCheck,
   Mail,
   FileCheck2,
+  Play,
 } from "lucide-react";
 import type { AgentRunEvent, OrchestrationRunAccepted, OrchestrationResult } from "../api";
+import type { OrchestrationConnection } from "../orchestrationSession";
 
 interface AgentsPageProps {
   session: {
     accepted: OrchestrationRunAccepted | null;
     result: OrchestrationResult | null;
     events: AgentRunEvent[];
-    connected: boolean;
+    connection: OrchestrationConnection;
     error: string | null;
   };
   onRerun: () => void;
@@ -38,6 +40,10 @@ const agentIcons: Record<string, React.ReactNode> = {
 export function AgentsPage({ session, onRerun }: AgentsPageProps) {
   const [selectedWave, setSelectedWave] = useState<number | null>(null);
 
+  const running =
+    session.connection === "starting" || session.connection === "streaming";
+  const runLabel = session.result || session.accepted ? "Refresh Run" : "Run Agents";
+
   const waves = [
     ["Recall Intake Agent"],
     ["Document Extraction Agent"],
@@ -57,20 +63,40 @@ export function AgentsPage({ session, onRerun }: AgentsPageProps) {
       <div className="page-header">
         <h1>Agent Mission Control</h1>
         <div className="page-header-actions">
-          {session.connected ? (
+          {session.connection === "completed" ? (
             <span className="status-badge connected">
               <CheckCircle2 size={14} />
-              Connected
+              {session.accepted ? "Completed" : "Last saved run"}
             </span>
-          ) : (
+          ) : session.connection === "idle" ? (
+            <span className="status-badge">
+              <Clock size={14} />
+              No run yet
+            </span>
+          ) : session.connection === "failed" ? (
+            <span className="status-badge reconnecting">
+              <AlertTriangle size={14} />
+              Unavailable
+            </span>
+          ) : session.connection === "reconnecting" ? (
             <span className="status-badge reconnecting">
               <RefreshCw size={14} className="spin" />
               Reconnecting
             </span>
+          ) : (
+            <span className="status-badge connected">
+              <RefreshCw size={14} className="spin" />
+              Running
+            </span>
           )}
-          <button type="button" className="utility-button" onClick={onRerun}>
-            <RefreshCw size={16} />
-            Restart Run
+          <button
+            type="button"
+            className="utility-button"
+            onClick={onRerun}
+            disabled={running}
+          >
+            {session.result || session.accepted ? <RefreshCw size={16} /> : <Play size={16} />}
+            {running ? "Running..." : runLabel}
           </button>
         </div>
       </div>
@@ -204,7 +230,9 @@ export function AgentsPage({ session, onRerun }: AgentsPageProps) {
         <div className="events-list">
           {session.events.length === 0 ? (
             <p className="empty-note">
-              No execution events yet. Agents will appear here as they run.
+              {session.connection === "idle"
+                ? "No run has started yet. Select Run Agents to launch the orchestration."
+                : "No execution events yet. Agents will appear here as they run."}
             </p>
           ) : (
             session.events.map((event) => (

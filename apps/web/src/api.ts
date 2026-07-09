@@ -101,6 +101,17 @@ export interface OrchestrationRunAccepted {
   result_url: string;
 }
 
+export interface OrchestrationRunView {
+  run_id: string;
+  incident_id: string;
+  status: "pending" | "running" | "completed" | "failed";
+  provider_mode: string;
+  started_at: string | null;
+  updated_at: string;
+  finished_at: string | null;
+  result: OrchestrationResult | null;
+}
+
 export interface MemoryRecord {
   id: string;
   kind: string;
@@ -464,6 +475,22 @@ export async function startDemoRun(
     throw new Error(`Run start failed with ${response.status}`);
   }
   return (await response.json()) as OrchestrationRunAccepted;
+}
+
+export async function fetchLatestRun(
+  signal?: AbortSignal,
+): Promise<OrchestrationRunView | null> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/orchestration/runs/latest`,
+    { headers: authHeaders(), signal },
+  );
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(`Latest run request failed with ${response.status}`);
+  }
+  return (await response.json()) as OrchestrationRunView;
 }
 
 export function orchestrationEventsUrl(
