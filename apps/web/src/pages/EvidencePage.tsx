@@ -45,6 +45,7 @@ export function EvidencePage({
   onUploadInspection,
 }: EvidencePageProps) {
   const [activeView, setActiveView] = useState<"review" | "packet">("review");
+  const [dragActive, setDragActive] = useState(false);
   const progress = getEvidenceProgress(evidence);
   const isRefreshing = packetState === "loading" || reviewState === "loading";
 
@@ -159,10 +160,23 @@ export function EvidencePage({
         </div>
 
         <div className="inspection-body">
-          <label className="upload-drop">
+          <label
+            className={`upload-drop ${dragActive ? "dragging" : ""}`}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragActive(true);
+            }}
+            onDragLeave={() => setDragActive(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragActive(false);
+              const file = event.dataTransfer.files?.[0];
+              if (file) onUploadInspection(file);
+            }}
+          >
             <ScanLine size={24} aria-hidden="true" />
-            <span>Upload shelf photo</span>
-            <small>JPEG, PNG, or WebP under 8 MB</small>
+            <span>{dragActive ? "Drop photo to inspect" : "Upload shelf photo"}</span>
+            <small>Drag & drop or browse · JPEG, PNG, or WebP under 8 MB</small>
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp"

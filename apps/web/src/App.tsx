@@ -2,14 +2,11 @@ import { Routes, Route, Link, useLocation } from "react-router-dom";
 import {
   AlertTriangle,
   BarChart3,
-  Bell,
   Brain,
-  ChevronDown,
   ClipboardCheck,
   FileText,
   HelpCircle,
   PackageCheck,
-  Search,
   Settings,
   Warehouse,
 } from "lucide-react";
@@ -29,7 +26,7 @@ import { demoIncident } from "./data/demoIncident";
 import type { EvidencePacket, EvidenceReviewState, ReviewDecision } from "./types";
 import type { ShelfInspectionResult } from "./api";
 import { IntakeWorkspace } from "./IntakeWorkspace";
-import { ProviderEvidenceControl } from "./ProviderEvidenceControl";
+import { TopBar } from "./TopBar";
 import { useIntakeWorkspace } from "./useIntakeWorkspace";
 import { useOrchestrationRun } from "./useOrchestrationRun";
 
@@ -97,16 +94,33 @@ export function App() {
     return () => { active = false; };
   }, []);
 
+  const openIntake = intakeController.open;
   useEffect(() => {
-    function focusSearch(event: KeyboardEvent) {
+    function handleShortcuts(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         searchRef.current?.focus();
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        target.closest("input, textarea, select, [contenteditable='true']")
+      ) {
+        return;
+      }
+      if (event.key === "/") {
+        event.preventDefault();
+        searchRef.current?.focus();
+      } else if (event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        openIntake();
       }
     }
-    window.addEventListener("keydown", focusSearch);
-    return () => window.removeEventListener("keydown", focusSearch);
-  }, []);
+    window.addEventListener("keydown", handleShortcuts);
+    return () => window.removeEventListener("keydown", handleShortcuts);
+  }, [openIntake]);
 
   useEffect(() => {
     const titles: Record<string, string> = {
@@ -184,12 +198,12 @@ export function App() {
       <div className="workspace">
         <TopBar
           incident={incident}
+          tasks={tasks}
           provider={provider}
           providerProof={providerProof}
           providerEvidenceState={providerEvidenceState}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
-          openTaskCount={openTaskCount}
           searchRef={searchRef}
         />
         <main className="dashboard" aria-label="Recall command center">
@@ -397,65 +411,3 @@ function Sidebar({ activePath, openTaskCount }: { activePath: string; openTaskCo
   );
 }
 
-function TopBar({
-  incident,
-  provider,
-  providerProof,
-  providerEvidenceState,
-  searchQuery,
-  onSearchChange,
-  openTaskCount,
-  searchRef,
-}: {
-  incident: typeof demoIncident;
-  provider: ProviderStatus | null;
-  providerProof: QwenVerificationReceipt | null;
-  providerEvidenceState: ProviderProofState;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
-  openTaskCount: number;
-  searchRef: React.Ref<HTMLInputElement>;
-}) {
-  return (
-    <header className="topbar">
-      <label className="search-box">
-        <Search size={18} aria-hidden="true" />
-        <span className="sr-only">Search recalls, lots, stores, tasks, evidence</span>
-        <input
-          type="search"
-          placeholder="Search recalls, lots, stores, tasks, evidence..."
-          ref={searchRef}
-          value={searchQuery}
-          onChange={(event) => onSearchChange(event.currentTarget.value)}
-        />
-        <kbd>⌘K</kbd>
-      </label>
-
-      <div className="topbar-actions">
-        <ProviderEvidenceControl
-          provider={provider}
-          proof={providerProof}
-          state={providerEvidenceState}
-        />
-        <div className="incident-status">
-          <span>Incident Status</span>
-          <strong>{incident.status.toUpperCase()}</strong>
-        </div>
-        <div className="dropdown">
-          <button type="button" className="icon-button" aria-label="Notifications">
-            <Bell size={20} />
-            {openTaskCount > 0 && <span className="notification-badge">{openTaskCount}</span>}
-          </button>
-        </div>
-        <div className="profile-button">
-          <span className="avatar">OM</span>
-          <span className="profile-copy">
-            <strong>Operations Manager</strong>
-            <span>Central Foods Co.</span>
-          </span>
-          <ChevronDown size={16} />
-        </div>
-      </div>
-    </header>
-  );
-}
