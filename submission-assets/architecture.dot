@@ -1,0 +1,133 @@
+digraph BatchHelmArchitecture {
+  graph [
+    bgcolor="#F8FAFC",
+    pad="0.22",
+    nodesep="0.34",
+    ranksep="0.48",
+    splines=ortho,
+    fontname="Arial",
+    fontsize=22,
+    fontcolor="#102A43",
+    label="BatchHelm AI | Alibaba Cloud Deployment Architecture",
+    labelloc=t,
+    labeljust=c
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Arial",
+    fontsize=11,
+    margin="0.14,0.09",
+    color="#9FB3C8",
+    fillcolor="#FFFFFF",
+    fontcolor="#102A43",
+    penwidth=1.2
+  ];
+
+  edge [
+    color="#627D98",
+    fontname="Arial",
+    fontsize=9,
+    fontcolor="#486581",
+    arrowsize=0.7,
+    penwidth=1.2
+  ];
+
+  operator [label="Operations Manager\nHuman review and approval", fillcolor="#FFF5F5", color="#E66A6A"];
+  inputs [label="Incident packet\nNotice + inventory CSV + shelf photo", fillcolor="#FFF9DB", color="#E9B949"];
+
+  subgraph cluster_ecs {
+    label="Alibaba Cloud ECS | Docker Compose";
+    color="#2F855A";
+    penwidth=2.0;
+    style="rounded,filled";
+    fillcolor="#F0FFF4";
+    fontname="Arial";
+    fontsize=15;
+    fontcolor="#22543D";
+
+    web [label="React Dashboard\nIntake, mission control, tasks, evidence", fillcolor="#FFFFFF", color="#38A169"];
+    api [label="FastAPI API\nValidation, REST, SSE event replay", fillcolor="#FFFFFF", color="#38A169"];
+    intake [label="Durable Intake Service\nParse, extract, correct, confirm", fillcolor="#E6FFFA", color="#319795"];
+    orchestrator [label="Orchestration Service\nRetries, checkpoints, failure isolation", fillcolor="#E6FFFA", color="#319795"];
+
+    agents [
+      shape=plain,
+      label=<
+        <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" COLOR="#805AD5" BGCOLOR="#FAF5FF">
+          <TR><TD COLSPAN="3"><B>9-Agent Society | Dependency DAG</B></TD></TR>
+          <TR>
+            <TD>1 Recall Intake</TD>
+            <TD>2 Document Extraction</TD>
+            <TD>3 Inventory Matching</TD>
+          </TR>
+          <TR>
+            <TD>4 Shelf Vision</TD>
+            <TD>5 Risk Scoring</TD>
+            <TD>6 Operations Tasks</TD>
+          </TR>
+          <TR>
+            <TD>7 Communications</TD>
+            <TD>8 Compliance Evidence</TD>
+            <TD>9 Memory</TD>
+          </TR>
+        </TABLE>
+      >
+    ];
+
+    web -> api [label="HTTPS"];
+    api -> intake;
+    intake -> orchestrator [label="confirmed snapshot"];
+    orchestrator -> agents [label="parallel waves"];
+  }
+
+  subgraph cluster_qwen {
+    label="Alibaba Cloud Model Studio";
+    color="#D53F8C";
+    penwidth=1.8;
+    style="rounded,filled";
+    fillcolor="#FFF5F7";
+    fontname="Arial";
+    fontsize=14;
+    fontcolor="#97266D";
+
+    qwen [label="Qwen qwen3.7-plus\nStructured text reasoning", fillcolor="#FFFFFF", color="#D53F8C"];
+    vision [label="Qwen Vision\nShelf image and lot recognition", fillcolor="#FFFFFF", color="#D53F8C"];
+  }
+
+  subgraph cluster_data {
+    label="Durable Evidence and State";
+    color="#3182CE";
+    penwidth=1.8;
+    style="rounded,filled";
+    fillcolor="#EBF8FF";
+    fontname="Arial";
+    fontsize=14;
+    fontcolor="#2A4365";
+
+    artifacts [label="Immutable artifacts\nSHA-256 provenance", shape=cylinder, fillcolor="#FFFFFF", color="#3182CE"];
+    runstore [label="Run + event store\nWave checkpoints", shape=cylinder, fillcolor="#FFFFFF", color="#3182CE"];
+    ledger [label="Review + memory stores\nAudit decisions and learned patterns", shape=cylinder, fillcolor="#FFFFFF", color="#3182CE"];
+  }
+
+  outputs [
+    label="Operational outputs\n23 quarantined units | Staff tasks | Approved evidence packet",
+    fillcolor="#FFF5F5",
+    color="#C53030",
+    penwidth=1.6
+  ];
+
+  {rank=same; operator; inputs}
+  operator -> web [label="review and approve"];
+  inputs -> web [label="upload"];
+
+  intake -> qwen [label="text extraction", color="#B83280"];
+  agents -> qwen [label="reasoning", color="#B83280"];
+  agents -> vision [label="image analysis", color="#B83280"];
+
+  intake -> artifacts [label="store source files", color="#2B6CB0"];
+  orchestrator -> runstore [label="persist every event", color="#2B6CB0"];
+  agents -> ledger [label="decisions and memory", color="#2B6CB0"];
+  agents -> outputs [label="verified result", color="#C53030", penwidth=1.6];
+}

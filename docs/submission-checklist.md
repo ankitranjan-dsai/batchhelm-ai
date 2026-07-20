@@ -2,7 +2,7 @@
 
 Track: **Autopilot Agent** (primary), **Agent Society** (secondary).
 
-Submission deadline: **July 9, 2026 at 2:00 PM Pacific Time**.
+Submission deadline: **July 20, 2026 at 2:00 PM Pacific Time** (extended from July 9).
 
 ## Required items
 
@@ -25,7 +25,7 @@ Submission deadline: **July 9, 2026 at 2:00 PM Pacific Time**.
 - [x] **Measure Agent Society efficiency** against a single-agent baseline (`docs/benchmarks/agent-society-vs-single-agent.md`, reproducible via `services/api/v1/scripts/benchmark_agent_society.py`)
 - [x] Final proof-first presentation deck with real intake screenshots (`docs/presentation/batchhelm-ai-hackathon-deck.pptx`)
 - [ ] **Update the final deck with the deployed URL and captured live-Qwen proof**
-- [ ] **Demo video under 3 minutes** uploaded to YouTube/Vimeo/Youku — *record using the demo script; add the link here and in the README*
+- [x] **Demo video under 3 minutes** uploaded to YouTube — [https://youtu.be/WPzdiB-dC1k](https://youtu.be/WPzdiB-dC1k)
 - [ ] Track selected on Devpost: Autopilot Agent
 - [ ] Submit final Devpost entry before the official deadline
 - [ ] (Optional) Blog/social post link for bonus prize

@@ -306,7 +306,7 @@ protected live Qwen call, and prints the public redacted proof receipt.
 - Sample artifacts: [evidence packet](docs/sample-evidence-packet.md) ·
   [incident walkthrough](docs/sample-incident-walkthrough.md)
 - Known limitations: [docs/known-limitations.md](docs/known-limitations.md)
-- Demo video: not yet recorded; required before the July 9 submission deadline
+- Demo video: [https://youtu.be/WPzdiB-dC1k](https://youtu.be/WPzdiB-dC1k)
 
 ## Author
 
